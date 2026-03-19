@@ -16,6 +16,7 @@ on:
 env:
   GH_USER: "github-actions[bot]"
   GH_EMAIL: "<41898282+github-actions[bot]@users.noreply.github.com>"
+  MAX_STABILITY_RUNS: "4"
 permissions: {}
 jobs:
   trigger-ci:
@@ -66,6 +67,18 @@ jobs:
               git fetch origin master
               git merge origin/master --no-ff --no-commit
               git commit --allow-empty -m "Merge master into PR #$pr_number"
+            fi
+
+            # Count existing stability trigger commits
+            trigger_count=$(git log --oneline --all --grep="Trigger CI for PR #$pr_number" | wc -l | tr -d ' ')
+            echo "Stability run count for PR #$pr_number: $trigger_count / $MAX_STABILITY_RUNS"
+
+            if [ "$trigger_count" -ge "$MAX_STABILITY_RUNS" ]; then
+              echo "PR #$pr_number reached $MAX_STABILITY_RUNS stability runs, removing label"
+              gh pr edit "$pr_number" --remove-label "ci/verify-stability" || true
+              gh pr edit "$pr_number" --remove-label "ci/verify-stability-merge-master" || true
+              gh pr comment "$pr_number" --body "Stability verification complete: $trigger_count runs triggered. Removing ci/verify-stability label."
+              continue
             fi
 
             # Commit an empty commit to trigger the CI
