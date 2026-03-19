@@ -11,7 +11,7 @@ permissions:
 env:
   UPSTREAM_REPO: kumahq/kuma
   LABEL: flaky-test
-  LOOKBACK_HOURS: "2"
+  LOOKBACK_HOURS: "24"
   MAX_ISSUES_PER_RUN: "10"
 
 jobs:
