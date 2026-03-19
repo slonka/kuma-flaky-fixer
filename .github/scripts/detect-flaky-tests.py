@@ -109,6 +109,8 @@ def build_job_success_timeline(all_runs):
     for entry in result:
         all_jobs.update(entry["jobs"])
     print(f"  Timeline: {len(result)} runs with successes, {len(all_jobs)} unique job names")
+    for name in sorted(all_jobs):
+        print(f"    - {name}")
     return result
 
 
