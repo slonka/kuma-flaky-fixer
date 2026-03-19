@@ -21,22 +21,16 @@ jobs:
   trigger-ci:
     runs-on: ubuntu-24.04
     steps:
-      - name: Generate GitHub app token
-        id: github-app-token
-        uses: actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf # v2.2.1
-        with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
-          token: ${{ steps.github-app-token.outputs.token }}
+          token: ${{ secrets.COPILOT_PAT }}
       - name: Get open pull requests and save to file
         run: |
           gh pr list --json number,labels > open_prs.json
         env:
-          GITHUB_TOKEN: ${{ steps.github-app-token.outputs.token }}
+          GITHUB_TOKEN: ${{ secrets.COPILOT_PAT }}
       - name: Process PRs
         id: process_prs
         run: |
@@ -48,7 +42,7 @@ jobs:
           echo "pr_numbers_with_verify_stability=$pr_numbers_with_verify_stability" >> "$GITHUB_OUTPUT"
           echo "pr_numbers_with_verify_stability_merge_master=$pr_numbers_with_verify_stability_merge_master" >> "$GITHUB_OUTPUT"
         env:
-          GITHUB_TOKEN: ${{ steps.github-app-token.outputs.token }}
+          GITHUB_TOKEN: ${{ secrets.COPILOT_PAT }}
       - name: Merge master branch (if applicable) and push a single commit
         if: steps.process_prs.outputs.pr_numbers_with_verify_stability != ''
         run: |
@@ -65,7 +59,7 @@ jobs:
 
             git config user.name "${GH_USER}"
             git config user.email "${GH_EMAIL}"
-          
+
             # Check if the PR needs to merge with master
             if echo "${{ steps.process_prs.outputs.pr_numbers_with_verify_stability_merge_master }}" | grep -wq "$pr_number"; then
               echo "Merging master into PR #$pr_number"
@@ -73,11 +67,11 @@ jobs:
               git merge origin/master --no-ff --no-commit
               git commit --allow-empty -m "Merge master into PR #$pr_number"
             fi
-          
+
             # Commit an empty commit to trigger the CI
             echo "Pushing empty commit to trigger CI for PR #$pr_number on $current_datetime"
             git commit --allow-empty -m "Trigger CI for PR #$pr_number on $current_datetime"
             git push origin "$pr_branch"
           done
         env:
-          GITHUB_TOKEN: ${{ steps.github-app-token.outputs.token }}
+          GITHUB_TOKEN: ${{ secrets.COPILOT_PAT }}
