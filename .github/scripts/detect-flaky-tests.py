@@ -63,21 +63,50 @@ def gh(*args):
     return result.stdout.strip()
 
 
-def get_failed_master_runs():
-    """Get all failed workflow runs on master in the lookback window."""
-    since = (
-        datetime.now(timezone.utc) - timedelta(hours=LOOKBACK_HOURS)
-    ).strftime("%Y-%m-%dT%H:%M:%SZ")
-
+def get_master_runs(status, since):
+    """Get workflow runs on master with the given status in the lookback window."""
     data = upstream_api(
         f"repos/{UPSTREAM}/actions/runs",
-        {"branch": "master", "status": "failure", "per_page": "30"},
+        {"branch": "master", "status": status, "per_page": "30"},
     )
     if not data:
         return []
 
     runs = data.get("workflow_runs", [])
     return [r for r in runs if r.get("created_at", "") >= since]
+
+
+def get_job_successes_after(successful_runs):
+    """Build a map of job_name -> latest success time from successful runs.
+
+    Used to check if a failed job also passed in a later run (= flaky).
+    """
+    result = []
+    for run in successful_runs:
+        data = upstream_api(
+            f"repos/{UPSTREAM}/actions/runs/{run['id']}/jobs",
+            {"per_page": "100"},
+        )
+        if not data:
+            continue
+        names = {
+            j["name"] for j in data.get("jobs", [])
+            if j.get("conclusion") == "success"
+        }
+        result.append({"time": run["created_at"], "jobs": names})
+    return result
+
+
+def is_flaky(job_name, failure_time, job_successes):
+    """A job is flaky if it also passed in a run AFTER the failure.
+
+    passed, passed, failed, passed = flaky (passed after failure)
+    passed, passed, failed, failed = probably broken (never passed after)
+    """
+    for entry in job_successes:
+        if entry["time"] > failure_time and job_name in entry["jobs"]:
+            return True
+    return False
 
 
 def get_failed_test_jobs(run_id):
@@ -280,19 +309,31 @@ def comment_on_issue(issue_number, run_url, details=""):
 def main():
     print(f"Checking {UPSTREAM} master for flaky tests (last {LOOKBACK_HOURS}h)...")
 
-    runs = get_failed_master_runs()
-    print(f"Found {len(runs)} failed master run(s)")
-    if not runs:
+    since = (
+        datetime.now(timezone.utc) - timedelta(hours=LOOKBACK_HOURS)
+    ).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    failed_runs = get_master_runs("failure", since)
+    print(f"Found {len(failed_runs)} failed master run(s)")
+    if not failed_runs:
         return
+
+    successful_runs = get_master_runs("success", since)
+    print(f"Found {len(successful_runs)} successful master run(s)")
+
+    print("Building job success timeline...")
+    job_successes = get_job_successes_after(successful_runs)
 
     issues = get_open_flaky_issues()
     print(f"Tracking {len(issues)} existing flaky test issue(s)")
 
     created = 0
+    skipped = 0
 
-    for run in runs:
+    for run in failed_runs:
         run_id = run["id"]
         run_url = run["html_url"]
+        run_time = run["created_at"]
         print(f"\nRun {run_id}: {run_url}")
 
         failed_jobs = get_failed_test_jobs(run_id)
@@ -301,6 +342,11 @@ def main():
         for job in failed_jobs:
             job_id = job["id"]
             job_name = job["name"]
+
+            if not is_flaky(job_name, run_time, job_successes):
+                print(f"  Skipping {job_name} - no later success (probably broken, not flaky)")
+                skipped += 1
+                continue
 
             annotations = get_annotations(job_id)
 
@@ -347,7 +393,7 @@ def main():
                         })
                         created += 1
 
-    print(f"\nDone. Created {created} new issue(s).")
+    print(f"\nDone. Created {created} new issue(s), skipped {skipped} non-flaky failure(s).")
 
 
 if __name__ == "__main__":
