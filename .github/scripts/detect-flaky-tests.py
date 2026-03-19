@@ -63,12 +63,12 @@ def gh(*args):
     return result.stdout.strip()
 
 
-def get_master_runs(since):
-    """Get all workflow runs on master in the lookback window."""
-    data = upstream_api(
-        f"repos/{UPSTREAM}/actions/runs",
-        {"branch": "master", "per_page": "30"},
-    )
+def get_master_runs(since, status=None):
+    """Get workflow runs on master in the lookback window."""
+    params = {"branch": "master", "per_page": "30"}
+    if status:
+        params["status"] = status
+    data = upstream_api(f"repos/{UPSTREAM}/actions/runs", params)
     if not data:
         return []
 
@@ -315,17 +315,16 @@ def main():
         datetime.now(timezone.utc) - timedelta(hours=LOOKBACK_HOURS)
     ).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    all_runs = get_master_runs(since)
-    print(f"Found {len(all_runs)} master run(s)")
-    if not all_runs:
-        return
-
-    failed_runs = [r for r in all_runs if r.get("conclusion") == "failure"]
-    print(f"  {len(failed_runs)} failed, {len(all_runs) - len(failed_runs)} other")
+    failed_runs = get_master_runs(since, status="failure")
+    print(f"Found {len(failed_runs)} failed master run(s)")
     if not failed_runs:
         return
 
-    print("Building job success timeline from all runs...")
+    # Get all completed runs (any conclusion) for the success timeline
+    all_runs = get_master_runs(since, status="completed")
+    print(f"Found {len(all_runs)} completed master run(s) for timeline")
+
+    print("Building job success timeline...")
     job_successes = build_job_success_timeline(all_runs)
 
     issues = get_open_flaky_issues()
