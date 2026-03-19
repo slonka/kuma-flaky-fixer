@@ -12,6 +12,7 @@ issue operations, since the GITHUB_TOKEN is scoped to this repo.
 
 import json
 import os
+import re
 import subprocess
 import sys
 import urllib.error
@@ -111,27 +112,37 @@ def get_annotations(job_id):
 
 
 def make_test_key(annotation):
-    """Create a stable, readable identifier for a test from its annotation."""
+    """Create a stable, readable identifier for a test from its annotation.
+
+    Ginkgo annotations have minimal messages like "BeforeAll 03/19/26 00:03:36.42"
+    and paths like "github.com/kumahq/kuma/v2/test/e2e_env/kubernetes/meshidentity/spire.go".
+    We strip timestamps and extract a short, stable path.
+    """
     path = annotation.get("path", "")
-    message = annotation.get("message", "")
+    message = annotation.get("message", "").strip()
+    line = annotation.get("start_line", "")
 
-    # Extract first meaningful line as test description
-    desc = ""
-    for line in message.split("\n"):
-        line = line.strip()
-        if line and not line.startswith("[") and len(line) > 10:
-            desc = line[:120]
-            break
-
-    if not desc:
-        first_line = message.split("\n")[0] if message else "unknown"
-        desc = first_line[:120]
+    # Strip Ginkgo timestamps: "BeforeAll 03/19/26 00:03:36.42" -> "BeforeAll"
+    desc = re.sub(r"\s+\d{2}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2}\.\d+", "", message)
+    desc = desc.split("\n")[0][:120]
 
     if path:
-        short = path.split("/")[-1].replace("_test.go", "").replace(".go", "")
-        return f"{short}: {desc}"
+        # Extract short path: ".../test/e2e_env/kubernetes/meshidentity/spire.go"
+        # -> "kubernetes/meshidentity/spire"
+        for prefix in ["test/e2e_env/", "test/e2e/", "test/"]:
+            idx = path.find(prefix)
+            if idx >= 0:
+                path = path[idx + len(prefix):]
+                break
+        else:
+            # Fallback: just use filename
+            path = path.split("/")[-1]
 
-    return desc
+        path = path.replace("_test.go", "").replace(".go", "")
+
+        return f"{path} {desc}"
+
+    return desc if desc else "unknown"
 
 
 def get_open_flaky_issues():
