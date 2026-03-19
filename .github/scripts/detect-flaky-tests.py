@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
 """
 Detect flaky tests from kumahq/kuma master branch CI failures.
-Creates/updates tracking issues on this fork repository.
+Creates/updates tracking issues on this repository.
 
 Runs every 30 minutes via GitHub Actions. Uses a 2-hour lookback
 window (with overlap) to avoid missing failures between runs.
+
+Uses urllib for upstream (public) API reads and gh CLI for local
+issue operations, since the GITHUB_TOKEN is scoped to this repo.
 """
 
 import json
 import os
 import subprocess
 import sys
+import urllib.error
+import urllib.parse
+import urllib.request
 from datetime import datetime, timedelta, timezone
 
 UPSTREAM = os.environ.get("UPSTREAM_REPO", "kumahq/kuma")
@@ -24,9 +30,27 @@ SKIP_JOB_PATTERNS = [
     "docker", "release", "deploy", "create-", "scorecard",
 ]
 
+API_BASE = "https://api.github.com"
+
+
+def upstream_api(path, params=None):
+    """GET request to the GitHub REST API (unauthenticated, public repos)."""
+    url = f"{API_BASE}/{path}"
+    if params:
+        url += "?" + urllib.parse.urlencode(params)
+
+    headers = {"Accept": "application/vnd.github+json"}
+    req = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(req) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        print(f"  API error: {e.code} {e.reason} for {path}", file=sys.stderr)
+        return None
+
 
 def gh(*args):
-    """Run gh CLI command and return stdout, or empty string on error."""
+    """Run gh CLI command (for local repo operations) and return stdout."""
     result = subprocess.run(
         ["gh"] + list(args),
         capture_output=True,
@@ -44,52 +68,41 @@ def get_failed_master_runs():
         datetime.now(timezone.utc) - timedelta(hours=LOOKBACK_HOURS)
     ).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    data = gh(
-        "api",
+    data = upstream_api(
         f"repos/{UPSTREAM}/actions/runs",
-        "-f", "branch=master",
-        "-f", "status=failure",
-        "-f", "per_page=30",
-        "--jq", ".workflow_runs",
+        {"branch": "master", "status": "failure", "per_page": "30"},
     )
     if not data:
         return []
 
-    runs = json.loads(data)
+    runs = data.get("workflow_runs", [])
     return [r for r in runs if r.get("created_at", "") >= since]
 
 
 def get_failed_test_jobs(run_id):
     """Get failed jobs, excluding known non-test jobs."""
-    data = gh(
-        "api",
+    data = upstream_api(
         f"repos/{UPSTREAM}/actions/runs/{run_id}/jobs",
-        "--paginate",
-        "--jq", '.jobs | map(select(.conclusion == "failure"))',
+        {"per_page": "100"},
     )
     if not data:
         return []
 
-    jobs = json.loads(data)
+    jobs = data.get("jobs", [])
+    failed = [j for j in jobs if j.get("conclusion") == "failure"]
     return [
-        j for j in jobs
+        j for j in failed
         if not any(p in j.get("name", "").lower() for p in SKIP_JOB_PATTERNS)
     ]
 
 
 def get_annotations(job_id):
     """Get failure annotations for a job (check run)."""
-    data = gh(
-        "api",
-        f"repos/{UPSTREAM}/check-runs/{job_id}/annotations",
-        "--jq", '[.[] | select(.annotation_level == "failure")]',
-    )
+    data = upstream_api(f"repos/{UPSTREAM}/check-runs/{job_id}/annotations")
     if not data:
         return []
-    try:
-        return json.loads(data)
-    except json.JSONDecodeError:
-        return []
+
+    return [a for a in data if a.get("annotation_level") == "failure"]
 
 
 def make_test_key(annotation):
