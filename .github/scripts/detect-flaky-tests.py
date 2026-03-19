@@ -106,7 +106,7 @@ def get_annotations(job_id):
     # Skip annotations from workflow files (not actual test failures)
     return [
         a for a in annotations
-        if not a.get("path", "").startswith(".github/")
+        if not a.get("path", "").startswith(".github")
     ]
 
 
@@ -298,13 +298,16 @@ def main():
                     test_key = make_test_key(ann)
                     existing = find_matching_issue(issues, test_key)
 
-                    if existing:
+                    if existing and existing["number"] > 0:
                         if not is_run_tracked(existing["number"], run_url):
                             comment_on_issue(
                                 existing["number"],
                                 run_url,
                                 ann.get("message", "")[:500],
                             )
+                    elif existing:
+                        # Placeholder from earlier in this run, skip
+                        pass
                     else:
                         if created < MAX_ISSUES_PER_RUN:
                             create_issue(test_key, job_name, run_url, ann)
@@ -318,9 +321,11 @@ def main():
                 test_key = f"job: {job_name}"
                 existing = find_matching_issue(issues, test_key)
 
-                if existing:
+                if existing and existing["number"] > 0:
                     if not is_run_tracked(existing["number"], run_url):
                         comment_on_issue(existing["number"], run_url)
+                elif existing:
+                    pass
                 else:
                     if created < MAX_ISSUES_PER_RUN:
                         create_job_level_issue(job_name, run_url)
