@@ -246,20 +246,26 @@ def is_run_tracked(issue_number, run_url):
     return False
 
 
-def create_issue(test_key, job_name, run_url, annotation):
-    """Create a new flaky test tracking issue."""
+def create_issue(test_key, occurrences):
+    """Create a new flaky test tracking issue with all occurrences listed."""
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    path = annotation.get("path", "unknown")
-    line = annotation.get("start_line", "?")
-    message = annotation.get("message", "No details")
+    first = occurrences[0]
+    path = first.get("path", "unknown")
+    line = first.get("line", "?")
+    message = first.get("message", "No details")
+
+    runs_list = "\n".join(
+        f"- {o['run_time']} [{o['job_name']}]({o['run_url']})"
+        for o in occurrences
+    )
 
     body = (
         "## Flaky Test Detected\n\n"
         f"**Test:** `{test_key}`\n"
         f"**File:** `{path}:{line}`\n"
-        f"**Job:** `{job_name}`\n"
-        f"**First seen:** {now}\n"
-        f"**Run:** {run_url}\n\n"
+        f"**Occurrences:** {len(occurrences)}\n"
+        f"**First seen:** {now}\n\n"
+        f"### Flaky Runs\n\n{runs_list}\n\n"
         "### Error\n"
         f"```\n{message[:1500]}\n```\n\n"
         "### Context\n\n"
@@ -280,50 +286,23 @@ def create_issue(test_key, job_name, run_url, annotation):
         "--body", body,
     )
     if result:
-        print(f"  Created issue: Flaky: {test_key}")
+        print(f"  Created issue: Flaky: {test_key} ({len(occurrences)} runs)")
         return True
     print(f"  Failed to create issue: Flaky: {test_key}")
     return False
 
 
-def create_job_level_issue(job_name, run_url):
-    """Create an issue when we only have job-level failure info."""
+def comment_on_issue(issue_number, new_runs):
+    """Add new occurrences as a comment to an existing issue."""
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    test_key = f"job: {job_name}"
-
-    body = (
-        "## Flaky Test Job Detected\n\n"
-        f"**Job:** `{job_name}`\n"
-        f"**First seen:** {now}\n"
-        f"**Run:** {run_url}\n\n"
-        "### Context\n\n"
-        f"This test job failed on the `master` branch of `{UPSTREAM}`.\n"
-        "No specific test annotations were available.\n"
-        "Check the run logs for details.\n"
+    runs_list = "\n".join(
+        f"- {o['run_time']} [{o['job_name']}]({o['run_url']})"
+        for o in new_runs
     )
-
-    result = gh(
-        "issue", "create",
-        "--title", f"Flaky: {test_key}",
-        "--label", LABEL,
-        "--body", body,
-    )
-    if result:
-        print(f"  Created job-level issue: {test_key}")
-        return True
-    print(f"  Failed to create job-level issue: {test_key}")
-    return False
-
-
-def comment_on_issue(issue_number, run_url, details=""):
-    """Add an occurrence comment to an existing issue."""
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    body = f"Flaked again at {now}\nRun: {run_url}"
-    if details:
-        body += f"\n```\n{details[:500]}\n```"
+    body = f"Flaked again ({len(new_runs)} new run(s) at {now}):\n{runs_list}"
 
     gh("issue", "comment", str(issue_number), "--body", body)
-    print(f"  Commented on issue #{issue_number}")
+    print(f"  Commented on issue #{issue_number} ({len(new_runs)} new runs)")
 
 
 def main():
@@ -348,27 +327,23 @@ def main():
     print("Building job success timeline...")
     job_successes = build_job_success_timeline(all_runs)
 
-    issues = get_open_flaky_issues()
-    print(f"Tracking {len(issues)} existing flaky test issue(s)")
-
-    created = 0
+    # Phase 1: Collect all flaky failures grouped by test key
+    print("\nCollecting flaky failures...")
+    flaky_map = {}  # test_key -> [occurrences]
     skipped = 0
 
     for run in failed_runs:
         run_id = run["id"]
         run_url = run["html_url"]
         run_time = run["created_at"]
-        print(f"\nRun {run_id}: {run_url}")
 
         failed_jobs = get_failed_test_jobs(run_id)
-        print(f"  {len(failed_jobs)} failed test job(s)")
 
         for job in failed_jobs:
             job_id = job["id"]
             job_name = job["name"]
 
             if not is_flaky(job_name, run_time, job_successes):
-                print(f"  Skipping {job_name} - no later success (probably broken, not flaky)")
                 skipped += 1
                 continue
 
@@ -377,45 +352,54 @@ def main():
             if annotations:
                 for ann in annotations:
                     test_key = make_test_key(ann)
-                    existing = find_matching_issue(issues, test_key)
-
-                    if existing and existing["number"] > 0:
-                        if not is_run_tracked(existing["number"], run_url):
-                            comment_on_issue(
-                                existing["number"],
-                                run_url,
-                                ann.get("message", "")[:500],
-                            )
-                    elif existing:
-                        # Placeholder from earlier in this run, skip
-                        pass
-                    else:
-                        if created < MAX_ISSUES_PER_RUN:
-                            create_issue(test_key, job_name, run_url, ann)
-                            issues.append({
-                                "number": -1,
-                                "title": f"Flaky: {test_key}",
-                                "body": "",
-                            })
-                            created += 1
+                    occurrence = {
+                        "run_url": run_url,
+                        "run_time": run_time,
+                        "job_name": job_name,
+                        "path": ann.get("path", "unknown"),
+                        "line": ann.get("start_line", "?"),
+                        "message": ann.get("message", ""),
+                    }
+                    flaky_map.setdefault(test_key, []).append(occurrence)
             else:
                 test_key = f"job: {job_name}"
-                existing = find_matching_issue(issues, test_key)
+                occurrence = {
+                    "run_url": run_url,
+                    "run_time": run_time,
+                    "job_name": job_name,
+                    "path": "unknown",
+                    "line": "?",
+                    "message": "No annotations available. Check run logs.",
+                }
+                flaky_map.setdefault(test_key, []).append(occurrence)
 
-                if existing and existing["number"] > 0:
-                    if not is_run_tracked(existing["number"], run_url):
-                        comment_on_issue(existing["number"], run_url)
-                elif existing:
-                    pass
-                else:
-                    if created < MAX_ISSUES_PER_RUN:
-                        create_job_level_issue(job_name, run_url)
-                        issues.append({
-                            "number": -1,
-                            "title": f"Flaky: {test_key}",
-                            "body": "",
-                        })
-                        created += 1
+    print(f"Found {len(flaky_map)} unique flaky test(s), skipped {skipped} non-flaky")
+
+    # Phase 2: Create or update issues
+    issues = get_open_flaky_issues()
+    print(f"Tracking {len(issues)} existing flaky test issue(s)")
+
+    created = 0
+
+    for test_key, occurrences in flaky_map.items():
+        existing = find_matching_issue(issues, test_key)
+
+        if existing and existing["number"] > 0:
+            # Filter to only new (untracked) runs
+            new_runs = [
+                o for o in occurrences
+                if not is_run_tracked(existing["number"], o["run_url"])
+            ]
+            if new_runs:
+                comment_on_issue(existing["number"], new_runs)
+        elif not existing and created < MAX_ISSUES_PER_RUN:
+            create_issue(test_key, occurrences)
+            issues.append({
+                "number": -1,
+                "title": f"Flaky: {test_key}",
+                "body": "",
+            })
+            created += 1
 
     print(f"\nDone. Created {created} new issue(s), skipped {skipped} non-flaky failure(s).")
 
