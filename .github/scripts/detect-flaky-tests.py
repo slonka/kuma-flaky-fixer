@@ -63,11 +63,11 @@ def gh(*args):
     return result.stdout.strip()
 
 
-def get_master_runs(status, since):
-    """Get workflow runs on master with the given status in the lookback window."""
+def get_master_runs(since):
+    """Get all workflow runs on master in the lookback window."""
     data = upstream_api(
         f"repos/{UPSTREAM}/actions/runs",
-        {"branch": "master", "status": status, "per_page": "30"},
+        {"branch": "master", "per_page": "30"},
     )
     if not data:
         return []
@@ -76,13 +76,14 @@ def get_master_runs(status, since):
     return [r for r in runs if r.get("created_at", "") >= since]
 
 
-def get_job_successes_after(successful_runs):
-    """Build a map of job_name -> latest success time from successful runs.
+def build_job_success_timeline(all_runs):
+    """For each run, find which jobs succeeded.
 
-    Used to check if a failed job also passed in a later run (= flaky).
+    A workflow run can be 'failure' overall but still have most jobs green.
+    We care about individual job results, not the run-level conclusion.
     """
     result = []
-    for run in successful_runs:
+    for run in all_runs:
         data = upstream_api(
             f"repos/{UPSTREAM}/actions/runs/{run['id']}/jobs",
             {"per_page": "100"},
@@ -93,7 +94,8 @@ def get_job_successes_after(successful_runs):
             j["name"] for j in data.get("jobs", [])
             if j.get("conclusion") == "success"
         }
-        result.append({"time": run["created_at"], "jobs": names})
+        if names:
+            result.append({"time": run["created_at"], "jobs": names})
     return result
 
 
@@ -313,16 +315,18 @@ def main():
         datetime.now(timezone.utc) - timedelta(hours=LOOKBACK_HOURS)
     ).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    failed_runs = get_master_runs("failure", since)
-    print(f"Found {len(failed_runs)} failed master run(s)")
+    all_runs = get_master_runs(since)
+    print(f"Found {len(all_runs)} master run(s)")
+    if not all_runs:
+        return
+
+    failed_runs = [r for r in all_runs if r.get("conclusion") == "failure"]
+    print(f"  {len(failed_runs)} failed, {len(all_runs) - len(failed_runs)} other")
     if not failed_runs:
         return
 
-    successful_runs = get_master_runs("success", since)
-    print(f"Found {len(successful_runs)} successful master run(s)")
-
-    print("Building job success timeline...")
-    job_successes = get_job_successes_after(successful_runs)
+    print("Building job success timeline from all runs...")
+    job_successes = build_job_success_timeline(all_runs)
 
     issues = get_open_flaky_issues()
     print(f"Tracking {len(issues)} existing flaky test issue(s)")
