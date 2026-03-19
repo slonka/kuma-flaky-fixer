@@ -1,0 +1,55 @@
+name: Retry Copilot on CI failure
+
+on:
+  workflow_run:
+    workflows: ["build-test-distribute"]
+    types: [completed]
+
+permissions:
+  pull-requests: write
+  actions: read
+
+jobs:
+  retry:
+    if: >-
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.pull_requests[0]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if PR is from Copilot and post feedback
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_PAT }}
+        run: |
+          PR_NUMBER="${{ github.event.workflow_run.pull_requests[0].number }}"
+          RUN_ID="${{ github.event.workflow_run.id }}"
+          RUN_URL="${{ github.event.workflow_run.html_url }}"
+          REPO="${{ github.repository }}"
+
+          if [ -z "$PR_NUMBER" ]; then
+            echo "No PR associated with this run"
+            exit 0
+          fi
+
+          PR_AUTHOR=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json author --jq '.author.login')
+          echo "PR #$PR_NUMBER author: $PR_AUTHOR"
+
+          if [ "$PR_AUTHOR" != "copilot-swe-agent[bot]" ]; then
+            echo "Not a Copilot PR, skipping"
+            exit 0
+          fi
+
+          echo "Copilot PR failed CI, collecting failure details..."
+
+          FAILED_JOBS=$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs" \
+            --jq '[.jobs[] | select(.conclusion == "failure") | .name] | join(", ")')
+
+          COMMENT="CI failed on this PR. Please revise your fix.
+
+          **Failed jobs:** $FAILED_JOBS
+          **Run:** $RUN_URL
+
+          Look at the failed test logs and update your approach. The test may need a different fix strategy."
+
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$COMMENT"
+          echo "Posted steering comment on PR #$PR_NUMBER"
