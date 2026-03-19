@@ -35,12 +35,19 @@ API_BASE = "https://api.github.com"
 
 
 def upstream_api(path, params=None):
-    """GET request to the GitHub REST API (unauthenticated, public repos)."""
+    """GET request to the GitHub REST API for public repos.
+
+    Uses GH_TOKEN if available for higher rate limits (5000/h vs 60/h).
+    """
     url = f"{API_BASE}/{path}"
     if params:
         url += "?" + urllib.parse.urlencode(params)
 
     headers = {"Accept": "application/vnd.github+json"}
+    token = os.environ.get("GH_TOKEN", "")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
     req = urllib.request.Request(url, headers=headers)
     try:
         with urllib.request.urlopen(req) as resp:
@@ -89,6 +96,7 @@ def build_job_success_timeline(all_runs):
             {"per_page": "100"},
         )
         if not data:
+            print(f"  Timeline: no data for run {run['id']}")
             continue
         names = {
             j["name"] for j in data.get("jobs", [])
@@ -96,6 +104,11 @@ def build_job_success_timeline(all_runs):
         }
         if names:
             result.append({"time": run["created_at"], "jobs": names})
+
+    all_jobs = set()
+    for entry in result:
+        all_jobs.update(entry["jobs"])
+    print(f"  Timeline: {len(result)} runs with successes, {len(all_jobs)} unique job names")
     return result
 
 
