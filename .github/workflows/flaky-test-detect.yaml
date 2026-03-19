@@ -3,7 +3,11 @@ name: Detect Flaky Tests
 on:
   schedule:
     - cron: "*/30 * * * *"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      lookback_hours:
+        description: "Hours to look back for failures"
+        default: "2"
 
 permissions:
   issues: write
@@ -11,7 +15,7 @@ permissions:
 env:
   UPSTREAM_REPO: kumahq/kuma
   LABEL: flaky-test
-  LOOKBACK_HOURS: "2"
+  LOOKBACK_HOURS: ${{ inputs.lookback_hours || '2' }}
   MAX_ISSUES_PER_RUN: "10"
 
 jobs:
