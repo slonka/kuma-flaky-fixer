@@ -19,5 +19,8 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Assign top flaky tests to copilot
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # COPILOT_PAT needed because GITHUB_TOKEN can't assign copilot agent.
+          # Create a classic PAT with repo scope and add as repo secret.
+          # Falls back to GITHUB_TOKEN for listing issues (read-only ops).
+          GH_TOKEN: ${{ secrets.COPILOT_PAT || secrets.GITHUB_TOKEN }}
         run: python3 .github/scripts/triage-flaky-tests.py

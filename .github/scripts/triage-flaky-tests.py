@@ -4,6 +4,9 @@ Weekly triage: rank flaky tests by frequency and assign top ones to copilot.
 
 Runs Monday 6 AM UTC. Picks the most frequently flaking tests
 (by comment count) and assigns them to GitHub Copilot coding agent.
+
+Requires a PAT with repo scope stored as COPILOT_PAT secret,
+since the default GITHUB_TOKEN cannot assign the copilot agent.
 """
 
 import json
@@ -29,6 +32,43 @@ def gh(*args):
     return result.stdout.strip()
 
 
+def assign_copilot(issue_number):
+    """Assign the Copilot coding agent to an issue via REST API."""
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    body = json.dumps({
+        "assignees": ["copilot-swe-agent[bot]"],
+        "agent_assignment": {
+            "target_repo": repo,
+            "base_branch": "master",
+        },
+    })
+
+    proc = subprocess.run(
+        [
+            "gh", "api", "--method", "POST",
+            "-H", "Accept: application/vnd.github+json",
+            f"repos/{repo}/issues/{issue_number}/assignees",
+            "--input", "-",
+        ],
+        input=body,
+        capture_output=True,
+        text=True,
+    )
+
+    if proc.returncode != 0:
+        print(f"  Failed to assign copilot to #{issue_number}: {proc.stderr.strip()}")
+        return False
+
+    response = json.loads(proc.stdout)
+    assignees = [a.get("login") for a in response.get("assignees", [])]
+    if "Copilot" in assignees:
+        print(f"  Assigned copilot to #{issue_number}")
+        return True
+
+    print(f"  Assignment response missing Copilot: {assignees}")
+    return False
+
+
 def main():
     print("Triaging flaky test issues...")
 
@@ -45,11 +85,11 @@ def main():
 
     issues = json.loads(data)
 
-    # Filter out already-assigned issues
+    # Filter out already-assigned issues (Copilot shows as "Copilot" login)
     unassigned = [
         i for i in issues
         if not any(
-            a.get("login") == "copilot" for a in i.get("assignees", [])
+            a.get("login") == "Copilot" for a in i.get("assignees", [])
         )
     ]
 
@@ -81,7 +121,7 @@ def main():
         occurrences = issue.get("comments", 0) + 1  # +1 for initial report
 
         print(f"  #{num}: {title} ({occurrences} occurrences)")
-        gh("issue", "edit", str(num), "--add-assignee", "copilot")
+        assign_copilot(num)
 
     print("\nDone!")
 
