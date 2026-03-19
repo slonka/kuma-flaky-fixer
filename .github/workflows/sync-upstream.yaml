@@ -1,0 +1,29 @@
+name: Sync from upstream
+
+on:
+  schedule:
+    - cron: "0 */4 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+      - name: Sync with kumahq/kuma master
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/kumahq/kuma.git
+          git fetch upstream master
+          git merge upstream/master --no-edit || {
+            echo "::error::Merge conflict syncing from upstream. Manual resolution needed."
+            git merge --abort
+            exit 1
+          }
+          git push origin master

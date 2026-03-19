@@ -1,0 +1,25 @@
+name: Detect Flaky Tests
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  issues: write
+
+env:
+  UPSTREAM_REPO: kumahq/kuma
+  LABEL: flaky-test
+  LOOKBACK_HOURS: "2"
+  MAX_ISSUES_PER_RUN: "10"
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Detect flaky tests on upstream master
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 .github/scripts/detect-flaky-tests.py
