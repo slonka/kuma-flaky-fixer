@@ -70,12 +70,15 @@ def gh(*args):
     return result.stdout.strip()
 
 
-def get_master_runs(since, status=None):
+def get_master_runs(since, status=None, workflow=None):
     """Get workflow runs on master in the lookback window."""
+    path = f"repos/{UPSTREAM}/actions/runs"
+    if workflow:
+        path = f"repos/{UPSTREAM}/actions/workflows/{workflow}/runs"
     params = {"branch": "master", "per_page": "30"}
     if status:
         params["status"] = status
-    data = upstream_api(f"repos/{UPSTREAM}/actions/runs", params)
+    data = upstream_api(path, params)
     if not data:
         return []
 
@@ -330,14 +333,17 @@ def main():
         datetime.now(timezone.utc) - timedelta(hours=LOOKBACK_HOURS)
     ).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    failed_runs = get_master_runs(since, status="failure")
-    print(f"Found {len(failed_runs)} failed master run(s)")
+    # Focus on build-test-distribute which runs the actual tests
+    wf = "build-test-distribute.yaml"
+
+    failed_runs = get_master_runs(since, status="failure", workflow=wf)
+    print(f"Found {len(failed_runs)} failed build-test-distribute run(s)")
     if not failed_runs:
         return
 
-    # Get all completed runs (any conclusion) for the success timeline
-    all_runs = get_master_runs(since, status="completed")
-    print(f"Found {len(all_runs)} completed master run(s) for timeline")
+    # Get completed runs from the same workflow for the success timeline
+    all_runs = get_master_runs(since, status="completed", workflow=wf)
+    print(f"Found {len(all_runs)} completed run(s) for timeline")
 
     print("Building job success timeline...")
     job_successes = build_job_success_timeline(all_runs)
