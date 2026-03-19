@@ -102,7 +102,12 @@ def get_annotations(job_id):
     if not data:
         return []
 
-    return [a for a in data if a.get("annotation_level") == "failure"]
+    annotations = [a for a in data if a.get("annotation_level") == "failure"]
+    # Skip annotations from workflow files (not actual test failures)
+    return [
+        a for a in annotations
+        if not a.get("path", "").startswith(".github/")
+    ]
 
 
 def make_test_key(annotation):
@@ -156,6 +161,8 @@ def find_matching_issue(issues, test_key):
 
 def is_run_tracked(issue_number, run_url):
     """Check if a run URL is already mentioned in an issue."""
+    if issue_number < 0:
+        return False
     repo = os.environ.get("GITHUB_REPOSITORY", "")
     if not repo:
         return False
@@ -206,13 +213,17 @@ def create_issue(test_key, job_name, run_url, annotation):
         "- Add the PR label `ci/verify-stability` to prove the fix is stable\n"
     )
 
-    gh(
+    result = gh(
         "issue", "create",
         "--title", f"Flaky: {test_key}",
         "--label", LABEL,
         "--body", body,
     )
-    print(f"  Created issue: Flaky: {test_key}")
+    if result:
+        print(f"  Created issue: Flaky: {test_key}")
+        return True
+    print(f"  Failed to create issue: Flaky: {test_key}")
+    return False
 
 
 def create_job_level_issue(job_name, run_url):
@@ -231,13 +242,17 @@ def create_job_level_issue(job_name, run_url):
         "Check the run logs for details.\n"
     )
 
-    gh(
+    result = gh(
         "issue", "create",
         "--title", f"Flaky: {test_key}",
         "--label", LABEL,
         "--body", body,
     )
-    print(f"  Created job-level issue: {test_key}")
+    if result:
+        print(f"  Created job-level issue: {test_key}")
+        return True
+    print(f"  Failed to create job-level issue: {test_key}")
+    return False
 
 
 def comment_on_issue(issue_number, run_url, details=""):
