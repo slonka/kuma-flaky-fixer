@@ -77,7 +77,7 @@ jobs:
               echo "PR #$pr_number reached $MAX_STABILITY_RUNS stability runs, removing label"
               gh pr edit "$pr_number" --remove-label "ci/verify-stability" || true
               gh pr edit "$pr_number" --remove-label "ci/verify-stability-merge-master" || true
-              gh pr comment "$pr_number" --body "Stability verification complete: $trigger_count runs triggered. Removing ci/verify-stability label."
+              gh pr comment "$pr_number" --body "Stability verification complete: $trigger_count runs triggered. Removing ci/verify-stability label. @slonka ready for review."
               continue
             fi
 
