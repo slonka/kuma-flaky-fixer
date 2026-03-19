@@ -98,11 +98,11 @@ def main():
         return
 
     # Sort by comment count descending (comments = additional occurrences)
-    unassigned.sort(key=lambda i: i.get("comments", 0), reverse=True)
+    unassigned.sort(key=lambda i: len(i.get("comments", [])), reverse=True)
 
     # Only assign issues with enough occurrences
     candidates = [
-        i for i in unassigned if i.get("comments", 0) >= MIN_OCCURRENCES
+        i for i in unassigned if len(i.get("comments", [])) >= MIN_OCCURRENCES
     ]
 
     if not candidates:
