@@ -10,6 +10,7 @@ import (
 	"github.com/gruntwork-io/terratest/modules/k8s"
 	"github.com/gruntwork-io/terratest/modules/retry"
 	"github.com/pkg/errors"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/kumahq/kuma/v2/test/framework"
@@ -71,14 +72,27 @@ func (t *k8sDeployment) Deploy(cluster framework.Cluster) error {
 			return err
 		}
 
-		pods := k8s.ListPods(cluster.GetTesting(),
-			cluster.GetKubectlOptions(t.ingressNamespace),
-			metav1.ListOptions{
-				LabelSelector: fmt.Sprintf("app=%s", app),
+		var pods []corev1.Pod
+		_, err = retry.DoWithRetryInterfaceE(
+			cluster.GetTesting(),
+			"get exactly one pod for "+app,
+			framework.DefaultRetries,
+			framework.DefaultTimeout,
+			func() (interface{}, error) {
+				pods = k8s.ListPods(cluster.GetTesting(),
+					cluster.GetKubectlOptions(t.ingressNamespace),
+					metav1.ListOptions{
+						LabelSelector: fmt.Sprintf("app=%s", app),
+					},
+				)
+				if len(pods) != 1 {
+					return nil, errors.Errorf("counting KIC pods. Got: %d. Expected: 1", len(pods))
+				}
+				return nil, nil
 			},
 		)
-		if len(pods) != 1 {
-			return errors.Errorf("counting KIC pods. Got: %d. Expected: 1", len(pods))
+		if err != nil {
+			return err
 		}
 
 		err = k8s.WaitUntilPodAvailableE(cluster.GetTesting(),
