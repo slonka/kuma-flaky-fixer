@@ -70,7 +70,7 @@ var _ = Describe("Full sync tests", func() {
 		// refused" on their first dial and trigger the resilient component's base
 		// backoff (5s), consuming most of the 30s Eventually window for sync verification.
 		Eventually(func() error {
-			conn, err := net.DialTimeout("tcp", fmt.Sprintf("localhost:%d", globalPort), time.Second)
+			conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", globalPort), time.Second)
 			if err != nil {
 				return err
 			}
@@ -86,7 +86,7 @@ var _ = Describe("Full sync tests", func() {
 			cfg.Store.Type = config_store.MemoryStore
 			cfg.Mode = config_core.Zone
 			cfg.Multizone.Zone.Name = zoneName
-			cfg.Multizone.Zone.GlobalAddress = fmt.Sprintf("grpc://localhost:%d", globalPort)
+			cfg.Multizone.Zone.GlobalAddress = fmt.Sprintf("grpc://127.0.0.1:%d", globalPort)
 			cfg.Multizone.Global.KDS.ZoneInsightFlushInterval = config_types.Duration{Duration: 100 * time.Millisecond}
 			rt := setup.NewTestRuntime(ctx, cfg, zoneStore)
 			Expect(zone.Setup(rt)).To(Succeed())
