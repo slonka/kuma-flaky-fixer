@@ -166,8 +166,9 @@ func (c *client) startGlobalToZoneSync(ctx context.Context, log logr.Logger, con
 		errorCh <- err
 		return
 	}
+	deltaStream := kds_client_v2.NewDeltaKDSStream(stream, c.clientID, c.rt.GetInstanceId(), cfgJson, len(c.typesSentByGlobal))
 	defer func() {
-		if err := stream.CloseSend(); err != nil {
+		if err := deltaStream.CloseSend(); err != nil {
 			log.Error(err, "CloseSend returned an error")
 		}
 	}()
@@ -175,7 +176,7 @@ func (c *client) startGlobalToZoneSync(ctx context.Context, log logr.Logger, con
 	syncClient := kds_client_v2.NewKDSSyncClient(
 		log,
 		c.typesSentByGlobal,
-		kds_client_v2.NewDeltaKDSStream(stream, c.clientID, c.rt.GetInstanceId(), cfgJson, len(c.typesSentByGlobal)),
+		deltaStream,
 		kds_sync_store.ZoneSyncCallback(
 			stream.Context(),
 			c.resourceSyncer,

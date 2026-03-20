@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	envoy_core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	envoy_sd "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
@@ -34,10 +35,15 @@ type stream struct {
 	cpConfig           string
 	instanceID         string
 
-	sendCh chan *envoy_sd.DeltaDiscoveryRequest
-	recvCh chan *envoy_sd.DeltaDiscoveryResponse
-	ctx    context.Context
-	cancel context.CancelCauseFunc
+	sendCh     chan *envoy_sd.DeltaDiscoveryRequest
+	recvCh     chan *envoy_sd.DeltaDiscoveryResponse
+	ctx        context.Context
+	cancel     context.CancelCauseFunc
+	sendLoopWg sync.WaitGroup
+}
+
+type closeSender interface {
+	CloseSend() error
 }
 
 type KDSSyncServiceStream interface {
@@ -79,6 +85,7 @@ func NewDeltaKDSStream(
 		cancel:             cancel,
 	}
 
+	stream.sendLoopWg.Add(1)
 	go stream.sendLoop()
 	go stream.recvLoop()
 
@@ -86,6 +93,7 @@ func NewDeltaKDSStream(
 }
 
 func (s *stream) sendLoop() {
+	defer s.sendLoopWg.Done()
 	for {
 		select {
 		case <-s.ctx.Done():
@@ -97,6 +105,14 @@ func (s *stream) sendLoop() {
 			}
 		}
 	}
+}
+
+func (s *stream) CloseSend() error {
+	s.sendLoopWg.Wait()
+	if cs, ok := s.streamClient.(closeSender); ok {
+		return cs.CloseSend()
+	}
+	return nil
 }
 
 func (s *stream) recvLoop() {
