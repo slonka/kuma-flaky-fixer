@@ -1,4 +1,4 @@
-name: Retry Copilot on CI failure
+name: Retry agent on CI failure
 
 on:
   workflow_run:
@@ -14,7 +14,7 @@ jobs:
     if: github.event.workflow_run.conclusion == 'failure'
     runs-on: ubuntu-latest
     steps:
-      - name: Check if failed run is a Copilot PR and post feedback
+      - name: Post failure details to agent PR
         env:
           GH_TOKEN: ${{ secrets.COPILOT_PAT }}
         run: |
@@ -23,7 +23,7 @@ jobs:
           BRANCH="${{ github.event.workflow_run.head_branch }}"
           REPO="${{ github.repository }}"
 
-          # Skip if not a copilot or claude-fix branch
+          # Skip if not an agent branch
           if [[ "$BRANCH" != copilot/* ]] && [[ "$BRANCH" != claude-fix/* ]] && [[ "$BRANCH" != fix/* ]]; then
             echo "Not an agent branch ($BRANCH), skipping"
             exit 0
@@ -41,10 +41,86 @@ jobs:
           FAILED_JOBS=$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs" \
             --jq '[.jobs[] | select(.conclusion == "failure") | .name] | join(", ")')
 
+          # Download e2e report artifacts and extract failure details
+          mkdir -p /tmp/e2e-reports
+          FAILURE_DETAILS=""
+
+          ARTIFACT_IDS=$(gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts" \
+            --jq '[.artifacts[] | select(.name | startswith("e2e-reports")) | .id] | .[]')
+
+          for artifact_id in $ARTIFACT_IDS; do
+            ARTIFACT_NAME=$(gh api "repos/$REPO/actions/artifacts/$artifact_id" --jq '.name')
+            echo "Downloading artifact: $ARTIFACT_NAME"
+            gh api "repos/$REPO/actions/artifacts/$artifact_id/zip" > "/tmp/e2e-reports/$artifact_id.zip" || continue
+            unzip -o -q "/tmp/e2e-reports/$artifact_id.zip" -d "/tmp/e2e-reports/$artifact_id" || continue
+
+            # Extract failures from Ginkgo JSON reports
+            while IFS= read -r report; do
+              FAILURES=$(python3 -c "
+          import json, sys
+          try:
+              data = json.load(open('$report'))
+              for suite in data if isinstance(data, list) else [data]:
+                  for spec in suite.get('SpecReports', []):
+                      if spec.get('State') == 'failed':
+                          name = ' > '.join(spec.get('ContainerHierarchyTexts', [])) + ' > ' + spec.get('LeafNodeText', '')
+                          msg = spec.get('Failure', {}).get('Message', '')[:500]
+                          loc = spec.get('Failure', {}).get('Location', {}).get('FileName', '') + ':' + str(spec.get('Failure', {}).get('Location', {}).get('LineNumber', ''))
+                          print(f'**{name}**')
+                          print(f'File: \`{loc}\`')
+                          print(f'\`\`\`')
+                          print(msg)
+                          print(f'\`\`\`')
+                          print()
+          except Exception as e:
+              print(f'Error parsing report: {e}', file=sys.stderr)
+          " 2>/dev/null)
+
+              if [ -n "$FAILURES" ]; then
+                FAILURE_DETAILS="${FAILURE_DETAILS}
+
+          ### $ARTIFACT_NAME
+          ${FAILURES}"
+              fi
+            done < <(find "/tmp/e2e-reports/$artifact_id" -name "report.json" 2>/dev/null)
+
+            # Also check JUnit XML for failures
+            while IFS= read -r xml; do
+              XML_FAILURES=$(python3 -c "
+          import xml.etree.ElementTree as ET, sys
+          try:
+              tree = ET.parse('$xml')
+              for tc in tree.iter('testcase'):
+                  fail = tc.find('failure')
+                  if fail is not None:
+                      name = tc.get('name', 'unknown')
+                      msg = (fail.get('message', '') or fail.text or '')[:500]
+                      print(f'**{name}**')
+                      print(f'\`\`\`')
+                      print(msg)
+                      print(f'\`\`\`')
+                      print()
+          except Exception as e:
+              print(f'Error parsing XML: {e}', file=sys.stderr)
+          " 2>/dev/null)
+
+              if [ -n "$XML_FAILURES" ]; then
+                FAILURE_DETAILS="${FAILURE_DETAILS}
+
+          ### $ARTIFACT_NAME (JUnit)
+          ${XML_FAILURES}"
+              fi
+            done < <(find "/tmp/e2e-reports/$artifact_id" -name "*.xml" 2>/dev/null)
+          done
+
+          # Truncate if too long (GitHub comment limit is 65536 chars)
+          FAILURE_DETAILS=$(echo "$FAILURE_DETAILS" | head -c 50000)
+
           COMMENT="CI failed on this PR. Please revise your fix.
 
           **Failed jobs:** $FAILED_JOBS
           **Run:** $RUN_URL
+          ${FAILURE_DETAILS}
 
           Look at the failed test logs and update your approach. The test may need a different fix strategy."
 
