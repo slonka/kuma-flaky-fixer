@@ -25,11 +25,14 @@ jobs:
             Fix the flaky test described in issue #${{ github.event.issue.number }}.
 
             Instructions:
-            - Read the test file mentioned in the issue
-            - Understand what the test does and why it's flaky
-            - Common causes: missing Eventually(), short timeouts, shared state, race conditions
+            - Read the issue carefully for the test name, file path, and error details
+            - If the issue only has a job name (no specific file), look at the linked CI run logs to identify the failing test
+            - Read the test file and understand what it's testing
+            - Common flaky test causes: missing Eventually(), short timeouts, shared state, race conditions
             - See .github/instructions/e2e-testing.instructions.md for patterns
-            - Make minimal, surgical changes
+            - Make minimal, surgical changes to the test code
+            - You MUST make at least one file change. If you can't identify the fix, leave a comment explaining why
+            - Do NOT open a PR with zero changes
           label_trigger: "claude-fix"
           claude_args: "--allowedTools Edit,Read,Write,Bash,Glob,Grep --model claude-sonnet-4-6"
           branch_prefix: "claude-fix/"

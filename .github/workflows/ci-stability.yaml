@@ -108,6 +108,15 @@ jobs:
               continue
             fi
 
+            # Skip PRs with no actual code changes (empty diff)
+            file_count=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$pr_number/files" --jq 'length')
+            if [ "$file_count" -eq 0 ]; then
+              echo "Skipping PR #$pr_number - empty diff (no code changes)"
+              gh pr comment "$pr_number" --body "Closing: PR has no code changes. The fix was never committed."
+              gh pr close "$pr_number" || true
+              continue
+            fi
+
             # Skip if CI is already running on this branch (avoid cancelling in-progress runs)
             in_progress=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?branch=$pr_branch&status=in_progress&per_page=5" \
               --jq "[.workflow_runs[] | select(.name == \"build-test-distribute\")] | length")
