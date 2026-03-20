@@ -31,8 +31,12 @@ jobs:
             - Common flaky test causes: missing Eventually(), short timeouts, shared state, race conditions
             - See .github/instructions/e2e-testing.instructions.md for patterns
             - Make minimal, surgical changes to the test code
-            - You MUST make at least one file change. If you can't identify the fix, leave a comment explaining why
+            - You MUST make at least one file change. If you can't identify the fix, leave a comment on the issue explaining why
             - Do NOT open a PR with zero changes
+            - After making changes, comment on the PR explaining:
+              1. What was causing the flake (root cause)
+              2. What you changed and why
+              3. Why the fix should be stable
           label_trigger: "claude-fix"
           claude_args: "--allowedTools Edit,Read,Write,Bash,Glob,Grep --model claude-sonnet-4-6"
           branch_prefix: "claude-fix/"
