@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	envoy_core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	envoy_sd "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
@@ -34,10 +35,11 @@ type stream struct {
 	cpConfig           string
 	instanceID         string
 
-	sendCh chan *envoy_sd.DeltaDiscoveryRequest
-	recvCh chan *envoy_sd.DeltaDiscoveryResponse
-	ctx    context.Context
-	cancel context.CancelCauseFunc
+	sendCh    chan *envoy_sd.DeltaDiscoveryRequest
+	recvCh    chan *envoy_sd.DeltaDiscoveryResponse
+	ctx       context.Context
+	cancel    context.CancelCauseFunc
+	sendLoopWg sync.WaitGroup
 }
 
 type KDSSyncServiceStream interface {
@@ -79,7 +81,11 @@ func NewDeltaKDSStream(
 		cancel:             cancel,
 	}
 
-	go stream.sendLoop()
+	stream.sendLoopWg.Add(1)
+	go func() {
+		defer stream.sendLoopWg.Done()
+		stream.sendLoop()
+	}()
 	go stream.recvLoop()
 
 	return stream
@@ -97,6 +103,22 @@ func (s *stream) sendLoop() {
 			}
 		}
 	}
+}
+
+// CloseSend waits for the sendLoop goroutine to finish (ensuring no concurrent
+// Send calls are in-flight) and then half-closes the underlying gRPC stream.
+// This avoids a data race between sendLoop calling Send and the caller calling
+// CloseSend on the same underlying stream. It is a no-op for server-side streams
+// that do not support CloseSend.
+func (s *stream) CloseSend() error {
+	s.sendLoopWg.Wait()
+	type closeSender interface {
+		CloseSend() error
+	}
+	if cs, ok := s.streamClient.(closeSender); ok {
+		return cs.CloseSend()
+	}
+	return nil
 }
 
 func (s *stream) recvLoop() {

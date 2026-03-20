@@ -45,6 +45,11 @@ type DeltaKDSStream interface {
 	Receive() (UpstreamResponse, error)
 	ACK(resourceType core_model.ResourceType) error
 	NACK(resourceType core_model.ResourceType, err error) error
+	// CloseSend waits for the internal send goroutine to finish and then
+	// half-closes the underlying stream. This must be called instead of
+	// calling CloseSend on the underlying gRPC stream directly, to avoid
+	// a data race between the send goroutine and the caller.
+	CloseSend() error
 }
 
 type KDSSyncClient interface {
