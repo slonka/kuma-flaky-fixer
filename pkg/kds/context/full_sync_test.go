@@ -15,6 +15,8 @@ import (
 	config_core "github.com/kumahq/kuma/v2/pkg/config/core"
 	config_store "github.com/kumahq/kuma/v2/pkg/config/core/resources/store"
 	config_types "github.com/kumahq/kuma/v2/pkg/config/types"
+	core_mesh "github.com/kumahq/kuma/v2/pkg/core/resources/apis/mesh"
+	"github.com/kumahq/kuma/v2/pkg/core/resources/apis/system"
 	"github.com/kumahq/kuma/v2/pkg/core/resources/store"
 	"github.com/kumahq/kuma/v2/pkg/kds/global"
 	"github.com/kumahq/kuma/v2/pkg/kds/zone"
@@ -85,8 +87,25 @@ var _ = Describe("Full sync tests", func() {
 			}()
 		}
 
-		// Wait for some time to ensure sync was complete
-		time.Sleep(time.Second * 5)
+		// Wait for both sync directions to complete before stopping CPs:
+		// 1. ZoneInsight in globalStore proves zone→global sync happened
+		// 2. Mesh in zoneStore proves global→zone sync happened
+		// 3. ZoneInsight in zoneStore proves zone CP wrote its local insight
+		for zoneName, zoneStore := range zones {
+			if zoneName == "global" {
+				continue
+			}
+			zoneName := zoneName
+			zoneStore := zoneStore
+			Eventually(func(g Gomega) {
+				zi := system.NewZoneInsightResource()
+				g.Expect(globalStore.Get(ctx, zi, store.GetByKey(zoneName, ""))).To(Succeed())
+				mesh := core_mesh.NewMeshResource()
+				g.Expect(zoneStore.Get(ctx, mesh, store.GetByKey("default", ""))).To(Succeed())
+				localZI := system.NewZoneInsightResource()
+				g.Expect(zoneStore.Get(ctx, localZI, store.GetByKey(zoneName, ""))).To(Succeed())
+			}, "30s", "100ms").Should(Succeed())
+		}
 		close(done)
 		wg.Wait()
 
