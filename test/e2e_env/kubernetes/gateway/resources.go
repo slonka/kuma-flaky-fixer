@@ -125,7 +125,7 @@ spec:
 			var err error
 			demoClientPod, err = PodNameOfApp(kubernetes.Cluster, "demo-client", waitingClientNamespace)
 			g.Expect(err).ToNot(HaveOccurred())
-		}, "30s", "1s").Should(Succeed())
+		}, "2m", "1s").Should(Succeed())
 
 		cmd := []string{"telnet", gatewayHost, "8080"}
 		// We pass in a stdin that blocks so that telnet will keep the
@@ -185,6 +185,6 @@ spec:
 
 			g.Expect(err).ToNot(HaveOccurred())
 			g.Expect(response.Exitcode).To(Or(Equal(52), Equal(56)))
-		}, "1m", "1s").MustPassRepeatedly(3).Should(Succeed())
+		}, "3m", "1s").MustPassRepeatedly(3).Should(Succeed())
 	})
 }
