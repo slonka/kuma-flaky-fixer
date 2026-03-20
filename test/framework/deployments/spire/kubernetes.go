@@ -72,10 +72,10 @@ func (t *k8sDeployment) Deploy(cluster framework.Cluster) error {
 	if err != nil {
 		return err
 	}
-	err = t.isPodReady(cluster, "app.kubernetes.io/name=spire-controller-manager")
-	if err != nil {
-		return err
-	}
+	// Note: spire-controller-manager runs as a sidecar inside spire-server-0, not as a
+	// separate pod, so there is no pod with label app.kubernetes.io/name=spire-controller-manager.
+	// The server pod readiness check above already guarantees the controller-manager (and its
+	// admission webhook) is available before any ClusterSPIFFEID resources are applied.
 
 	return nil
 }
