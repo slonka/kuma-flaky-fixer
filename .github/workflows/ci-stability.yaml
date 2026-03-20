@@ -79,6 +79,16 @@ jobs:
               continue
             fi
 
+            # Skip if CI is already running on this branch (avoid cancelling in-progress runs)
+            in_progress=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?branch=$pr_branch&status=in_progress&per_page=5" \
+              --jq "[.workflow_runs[] | select(.name == \"build-test-distribute\")] | length")
+            queued=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?branch=$pr_branch&status=queued&per_page=5" \
+              --jq "[.workflow_runs[] | select(.name == \"build-test-distribute\")] | length")
+            if [ "$in_progress" -gt 0 ] || [ "$queued" -gt 0 ]; then
+              echo "Skipping PR #$pr_number - CI already running ($in_progress in progress, $queued queued)"
+              continue
+            fi
+
             # Commit an empty commit to trigger the CI
             echo "Pushing empty commit to trigger CI for PR #$pr_number on $current_datetime"
             git commit --allow-empty -m "Trigger CI for PR #$pr_number on $current_datetime"
