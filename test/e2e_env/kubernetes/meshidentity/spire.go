@@ -53,9 +53,14 @@ spec:
 				// default spire helm uses 1.27.16 which fails since there is no image
 				spire.WithKubectlVersion("v1.31.11"),
 			)).
-			Install(YamlK8s(workflowRegistration)).
 			Setup(kubernetes.Cluster)
 		Expect(err).ToNot(HaveOccurred())
+
+		// Apply ClusterSPIFFEID with retry: the spire-controller-manager admission
+		// webhook may not be ready immediately after the SPIRE pods become available.
+		Eventually(func(g Gomega) {
+			g.Expect(YamlK8s(workflowRegistration)(kubernetes.Cluster)).To(Succeed())
+		}, "30s", "2s").Should(Succeed())
 	})
 
 	AfterEachFailure(func() {
@@ -130,8 +135,8 @@ spec:
 		// and it's a tls traffic
 		Eventually(func(g Gomega) {
 			s, err := admin.GetStats("listener.*_80.ssl.handshake")
-			Expect(err).ToNot(HaveOccurred())
-			Expect(s).To(stats.BeGreaterThanZero())
-		}, "5s", "1s").Should(Succeed())
+			g.Expect(err).ToNot(HaveOccurred())
+			g.Expect(s).To(stats.BeGreaterThanZero())
+		}, "30s", "1s").Should(Succeed())
 	})
 }
