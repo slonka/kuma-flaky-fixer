@@ -120,8 +120,15 @@ spec:
 		// Open TCP connections to the gateway
 		defer GinkgoRecover()
 
-		demoClientPod, err := PodNameOfApp(kubernetes.Cluster, "demo-client", waitingClientNamespace)
-		Expect(err).ToNot(HaveOccurred())
+		// After KillAppPod the old pod may still be Terminating while the new one
+		// is starting, causing PodNameOfApp to see 2 pods and return an error.
+		// Retry until exactly one pod is present.
+		var demoClientPod string
+		Eventually(func(g Gomega) {
+			var err error
+			demoClientPod, err = PodNameOfApp(kubernetes.Cluster, "demo-client", waitingClientNamespace)
+			g.Expect(err).ToNot(HaveOccurred())
+		}, "30s", "1s").Should(Succeed())
 
 		cmd := []string{"telnet", gatewayHost, "8080"}
 		// We pass in a stdin that blocks so that telnet will keep the
