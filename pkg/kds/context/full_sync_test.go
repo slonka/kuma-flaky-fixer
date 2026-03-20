@@ -75,6 +75,9 @@ var _ = Describe("Full sync tests", func() {
 		// starting zone CPs. Without this, zone mux clients can hit "connection
 		// refused" on their first dial and trigger the resilient component's base
 		// backoff (5s), consuming most of the 30s Eventually window for sync verification.
+		// Use 127.0.0.1 explicitly (not "localhost") because on Linux "localhost" can
+		// resolve to [::1] (IPv6) while the gRPC server binds on 0.0.0.0 (IPv4 only),
+		// causing the dial to fail even after the port-readiness check passes.
 		Eventually(func() error {
 			conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", globalPort), time.Second)
 			if err != nil {
@@ -92,6 +95,7 @@ var _ = Describe("Full sync tests", func() {
 			cfg.Store.Type = config_store.MemoryStore
 			cfg.Mode = config_core.Zone
 			cfg.Multizone.Zone.Name = zoneName
+			// Use 127.0.0.1 explicitly; see comment above about IPv6 resolution.
 			cfg.Multizone.Zone.GlobalAddress = fmt.Sprintf("grpc://127.0.0.1:%d", globalPort)
 			cfg.Multizone.Global.KDS.ZoneInsightFlushInterval = config_types.Duration{Duration: 100 * time.Millisecond}
 			rt := setup.NewTestRuntime(ctx, cfg, zoneStore)
