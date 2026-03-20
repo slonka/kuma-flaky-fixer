@@ -97,14 +97,8 @@ var _ = Describe("Full sync tests", func() {
 				g.Expect(out).To(matchers.MatchGoldenEqual(folder, zoneName+".golden.yaml"))
 			}, "30s", "100ms").Should(Succeed())
 		}
+		// All stores match their golden files; stop the CPs.
 		close(done)
 		wg.Wait()
-
-		// Compare golden files
-		for zoneName, zoneStore := range zones {
-			out, err := test_store.ExtractResources(ctx, zoneStore)
-			Expect(err).To(Succeed())
-			Expect(out).To(matchers.MatchGoldenEqual(folder, zoneName+".golden.yaml"), "zone %s", zoneName)
-		}
 	}, test.EntriesAsFolder("full_sync"))
 })
