@@ -2,6 +2,7 @@ package context_test
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"path"
 	"strings"
@@ -64,6 +65,18 @@ var _ = Describe("Full sync tests", func() {
 			defer GinkgoRecover()
 			Expect(rt.Start(done)).To(Succeed())
 		}()
+		// Wait for the global CP's gRPC server to be ready before connecting zone CPs.
+		// Without this, zone CPs may get "connection refused" on their first dial attempt,
+		// which terminates the KDS mux client with no retry, preventing zone sync.
+		Eventually(func() error {
+			conn, err := net.Dial("tcp", fmt.Sprintf("localhost:%d", globalPort))
+			if err != nil {
+				return err
+			}
+			_ = conn.Close()
+			return nil
+		}, "10s", "100ms").Should(Succeed())
+
 		// start zones
 		for zoneName, zoneStore := range zones {
 			if zoneName == "global" {
