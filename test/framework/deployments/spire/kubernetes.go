@@ -1,8 +1,11 @@
 package spire
 
 import (
+	"context"
+
 	"github.com/gruntwork-io/terratest/modules/helm"
 	"github.com/gruntwork-io/terratest/modules/k8s"
+	"github.com/gruntwork-io/terratest/modules/retry"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -72,7 +75,30 @@ func (t *k8sDeployment) Deploy(cluster framework.Cluster) error {
 	if err != nil {
 		return err
 	}
-	err = t.isPodReady(cluster, "app.kubernetes.io/name=spire-controller-manager")
+	// Wait for the spire-controller-manager webhook service to have endpoints before returning.
+	// The controller-manager may run as a sidecar in spire-server-0 or as a separate deployment
+	// depending on the chart version, so we wait for the service endpoints directly rather than
+	// waiting for a pod with a specific label.
+	_, err = retry.DoWithRetryE(cluster.GetTesting(),
+		"wait for spire-controller-manager-webhook to have endpoints",
+		framework.DefaultRetries*3, // spire is fetched from the internet. Increase the timeout to prevent long downloads of images.
+		framework.DefaultTimeout,
+		func() (string, error) {
+			client, err := k8s.GetKubernetesClientFromOptionsE(cluster.GetTesting(), cluster.GetKubectlOptions(t.namespace))
+			if err != nil {
+				return "", err
+			}
+			endpoints, err := client.CoreV1().Endpoints(t.namespace).Get(context.Background(), "spire-controller-manager-webhook", metav1.GetOptions{})
+			if err != nil {
+				return "", err
+			}
+			for _, subset := range endpoints.Subsets {
+				if len(subset.Addresses) > 0 {
+					return "", nil
+				}
+			}
+			return "", errors.Errorf("service %q has no ready endpoints yet", "spire-controller-manager-webhook")
+		})
 	if err != nil {
 		return err
 	}
