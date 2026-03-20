@@ -23,9 +23,9 @@ jobs:
           BRANCH="${{ github.event.workflow_run.head_branch }}"
           REPO="${{ github.repository }}"
 
-          # Skip if not a copilot branch
-          if [[ "$BRANCH" != copilot/* ]]; then
-            echo "Not a copilot branch ($BRANCH), skipping"
+          # Skip if not a copilot or claude-fix branch
+          if [[ "$BRANCH" != copilot/* ]] && [[ "$BRANCH" != claude-fix/* ]] && [[ "$BRANCH" != fix/* ]]; then
+            echo "Not an agent branch ($BRANCH), skipping"
             exit 0
           fi
 
@@ -36,7 +36,7 @@ jobs:
             exit 0
           fi
 
-          echo "Copilot PR #$PR_NUMBER failed CI, collecting failure details..."
+          echo "Agent PR #$PR_NUMBER failed CI, collecting failure details..."
 
           FAILED_JOBS=$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs" \
             --jq '[.jobs[] | select(.conclusion == "failure") | .name] | join(", ")')
@@ -48,5 +48,16 @@ jobs:
 
           Look at the failed test logs and update your approach. The test may need a different fix strategy."
 
+          # Post on PR (triggers copilot steering)
           gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$COMMENT"
+
+          # For Claude PRs, also comment on the linked issue with @claude
+          if [[ "$BRANCH" == claude-fix/* ]] || [[ "$BRANCH" == fix/* ]]; then
+            ISSUE_NUMBER=$(gh pr view "$PR_NUMBER" --repo "$REPO" --json body --jq '.body' | grep -oP '#\K[0-9]+' | head -1)
+            if [ -n "$ISSUE_NUMBER" ]; then
+              gh issue comment "$ISSUE_NUMBER" --repo "$REPO" --body "@claude CI failed on PR #$PR_NUMBER. $COMMENT"
+              echo "Posted @claude comment on issue #$ISSUE_NUMBER"
+            fi
+          fi
+
           echo "Posted steering comment on PR #$PR_NUMBER"
