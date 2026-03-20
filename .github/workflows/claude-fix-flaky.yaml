@@ -33,4 +33,5 @@ jobs:
           label_trigger: "claude-fix"
           claude_args: "--allowedTools Edit,Read,Write,Bash,Glob,Grep --model claude-sonnet-4-6"
           branch_prefix: "claude-fix/"
+          base_branch: "master"
           github_token: ${{ secrets.COPILOT_PAT }}
