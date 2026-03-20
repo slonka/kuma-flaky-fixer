@@ -63,15 +63,18 @@ jobs:
               git commit --allow-empty -m "Merge master into PR #$pr_number"
             fi
 
-            # Count existing stability trigger commits
-            trigger_count=$(git log --oneline --all --grep="Trigger CI for PR #$pr_number" | wc -l | tr -d ' ')
-            echo "Stability run count for PR #$pr_number: $trigger_count / $MAX_STABILITY_RUNS"
+            # Count successful CI runs on this PR's branch
+            success_count=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?branch=$pr_branch&status=completed&per_page=20" \
+              --jq "[.workflow_runs[] | select(.name == \"build-test-distribute\" and .conclusion == \"success\")] | length")
+            total_count=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?branch=$pr_branch&status=completed&per_page=20" \
+              --jq "[.workflow_runs[] | select(.name == \"build-test-distribute\")] | length")
+            echo "Stability for PR #$pr_number: $success_count/$total_count successful (need $MAX_STABILITY_RUNS)"
 
-            if [ "$trigger_count" -ge "$MAX_STABILITY_RUNS" ]; then
-              echo "PR #$pr_number reached $MAX_STABILITY_RUNS stability runs, removing label"
+            if [ "$success_count" -ge "$MAX_STABILITY_RUNS" ]; then
+              echo "PR #$pr_number has $success_count successful runs, removing label"
               gh pr edit "$pr_number" --remove-label "ci/verify-stability" || true
               gh pr edit "$pr_number" --remove-label "ci/verify-stability-merge-master" || true
-              gh pr comment "$pr_number" --body "Stability verification complete: $trigger_count runs triggered. Removing ci/verify-stability label. @slonka ready for review."
+              gh pr comment "$pr_number" --body "Stability verification complete: $success_count/$total_count successful CI runs. Removing ci/verify-stability label. @slonka ready for review."
               continue
             fi
 
