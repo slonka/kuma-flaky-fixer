@@ -3,6 +3,8 @@ name: Claude Fix Flaky Test
 on:
   issues:
     types: [labeled]
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: write
@@ -11,7 +13,6 @@ permissions:
 
 jobs:
   fix:
-    if: github.event.label.name == 'claude-fix'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -21,7 +22,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.ANTHROPIC_AUTH_TOKEN }}
           prompt: |
-            Read issue #${{ github.event.issue.number }} and fix the flaky test described in it.
+            Fix the flaky test described in issue #${{ github.event.issue.number }}.
 
             Instructions:
             - Read the test file mentioned in the issue
@@ -29,5 +30,7 @@ jobs:
             - Common causes: missing Eventually(), short timeouts, shared state, race conditions
             - See .github/instructions/e2e-testing.instructions.md for patterns
             - Make minimal, surgical changes
-            - Create a new branch and open a PR with label ci/verify-stability
+          label_trigger: "claude-fix"
+          claude_args: "--allowedTools Edit,Read,Write,Bash,Glob,Grep --model claude-sonnet-4-6"
+          branch_prefix: "claude-fix/"
           github_token: ${{ secrets.COPILOT_PAT }}
