@@ -30,8 +30,9 @@ jobs:
       - name: Find PRs with stability labels
         id: process_prs
         run: |
-          pr_numbers_with_verify_stability=$(gh pr list --label "ci/verify-stability" --json number --jq '.[].number' | tr '\n' ' ')
-          pr_numbers_with_verify_stability_merge_master=$(gh pr list --label "ci/verify-stability-merge-master" --json number --jq '.[].number' | tr '\n' ' ')
+          # Use REST API - gh pr list has GraphQL/REST label inconsistency
+          pr_numbers_with_verify_stability=$(gh api "repos/$GITHUB_REPOSITORY/issues?state=open&labels=ci/verify-stability&per_page=50" --jq '.[].number' | tr '\n' ' ')
+          pr_numbers_with_verify_stability_merge_master=$(gh api "repos/$GITHUB_REPOSITORY/issues?state=open&labels=ci/verify-stability-merge-master&per_page=50" --jq '.[].number' | tr '\n' ' ')
           echo "PRs with 'ci/verify-stability' label: $pr_numbers_with_verify_stability"
           echo "PRs with 'ci/verify-stability-merge-master' label: $pr_numbers_with_verify_stability_merge_master"
           echo "pr_numbers_with_verify_stability=$pr_numbers_with_verify_stability" >> "$GITHUB_OUTPUT"
