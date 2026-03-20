@@ -85,16 +85,15 @@ var _ = Describe("Full sync tests", func() {
 			}()
 		}
 
-		// Wait for some time to ensure sync was complete
-		time.Sleep(time.Second * 5)
+		// Wait for sync to complete by polling until all stores match golden files
+		Eventually(func(g Gomega) {
+			for zoneName, zoneStore := range zones {
+				out, err := test_store.ExtractResources(ctx, zoneStore)
+				g.Expect(err).To(Succeed())
+				g.Expect(out).To(matchers.MatchGoldenEqual(folder, zoneName+".golden.yaml"), "zone %s", zoneName)
+			}
+		}, "30s", "100ms").Should(Succeed())
 		close(done)
 		wg.Wait()
-
-		// Compare golden files
-		for zoneName, zoneStore := range zones {
-			out, err := test_store.ExtractResources(ctx, zoneStore)
-			Expect(err).To(Succeed())
-			Expect(out).To(matchers.MatchGoldenEqual(folder, zoneName+".golden.yaml"), "zone %s", zoneName)
-		}
 	}, test.EntriesAsFolder("full_sync"))
 })
