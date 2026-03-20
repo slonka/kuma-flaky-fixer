@@ -33,6 +33,12 @@ var _ = Describe("Full sync tests", func() {
 		zones := make(map[string]store.ResourceStore)
 		wg := sync.WaitGroup{}
 		done := make(chan struct{})
+		var closeOnce sync.Once
+		// Ensure goroutines are stopped even if the test fails before reaching close(done).
+		DeferCleanup(func() {
+			closeOnce.Do(func() { close(done) })
+			wg.Wait()
+		})
 
 		for _, file := range files {
 			if strings.HasSuffix(file.Name(), ".input.yaml") {
@@ -111,7 +117,7 @@ var _ = Describe("Full sync tests", func() {
 			}, "30s", "100ms").Should(Succeed())
 		}
 		// All stores match their golden files; stop the CPs.
-		close(done)
+		closeOnce.Do(func() { close(done) })
 		wg.Wait()
 	}, test.EntriesAsFolder("full_sync"))
 })
