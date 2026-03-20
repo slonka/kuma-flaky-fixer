@@ -12,7 +12,7 @@ on:
 env:
   GH_USER: "github-actions[bot]"
   GH_EMAIL: "<41898282+github-actions[bot]@users.noreply.github.com>"
-  MAX_STABILITY_RUNS: "4"
+  MAX_STABILITY_RUNS: "8"
 permissions: {}
 jobs:
   trigger-ci:
