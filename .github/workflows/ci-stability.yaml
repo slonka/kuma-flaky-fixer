@@ -60,18 +60,51 @@ jobs:
               git commit --allow-empty -m "Merge master into PR #$pr_number"
             fi
 
-            # Count successful CI runs on this PR's branch
-            success_count=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?branch=$pr_branch&status=completed&per_page=20" \
-              --jq "[.workflow_runs[] | select(.name == \"build-test-distribute\" and .conclusion == \"success\")] | length")
-            total_count=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?branch=$pr_branch&status=completed&per_page=20" \
-              --jq "[.workflow_runs[] | select(.name == \"build-test-distribute\")] | length")
-            echo "Stability for PR #$pr_number: $success_count/$total_count successful (need $MAX_STABILITY_RUNS)"
+            # Find which test suite this PR fixes (from changed files)
+            changed_files=$(gh pr diff "$pr_number" --name-only)
+            suite_keyword=""
+            for f in $changed_files; do
+              case "$f" in
+                test/e2e_env/kubernetes/*) suite_keyword="kubernetes" ;;
+                test/e2e_env/multizone/*) suite_keyword="multizone" ;;
+                test/e2e_env/universal/*) suite_keyword="universal" ;;
+                test/e2e/*) suite_keyword="test_e2e" ;;
+                *_test.go) suite_keyword="test_unit" ;;
+              esac
+              [ -n "$suite_keyword" ] && break
+            done
+            echo "Suite keyword for PR #$pr_number: ${suite_keyword:-unknown}"
 
-            if [ "$success_count" -ge "$MAX_STABILITY_RUNS" ]; then
-              echo "PR #$pr_number has $success_count successful runs, removing label"
+            # Count runs where the relevant job passed (ignore unrelated flakes)
+            run_ids=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?branch=$pr_branch&status=completed&per_page=20" \
+              --jq '[.workflow_runs[] | select(.name == "build-test-distribute" and .conclusion != "cancelled") | .id] | .[]')
+
+            stable_count=0
+            total_count=0
+            for run_id in $run_ids; do
+              total_count=$((total_count + 1))
+              if [ -z "$suite_keyword" ]; then
+                # No suite detected, fall back to overall success
+                conclusion=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id" --jq '.conclusion')
+                if [ "$conclusion" = "success" ]; then
+                  stable_count=$((stable_count + 1))
+                fi
+              else
+                # Check if the relevant job passed (ignore other job failures)
+                relevant_failed=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100" \
+                  --jq "[.jobs[] | select(.name | contains(\"$suite_keyword\")) | select(.conclusion == \"failure\")] | length")
+                if [ "$relevant_failed" -eq 0 ]; then
+                  stable_count=$((stable_count + 1))
+                fi
+              fi
+            done
+            echo "Stability for PR #$pr_number: $stable_count/$total_count stable (need $MAX_STABILITY_RUNS)"
+
+            if [ "$stable_count" -ge "$MAX_STABILITY_RUNS" ]; then
+              echo "PR #$pr_number has $stable_count stable runs, removing label"
               gh pr edit "$pr_number" --remove-label "ci/verify-stability" || true
               gh pr edit "$pr_number" --remove-label "ci/verify-stability-merge-master" || true
-              gh pr comment "$pr_number" --body "Stability verification complete: $success_count/$total_count successful CI runs. Removing ci/verify-stability label. @slonka ready for review."
+              gh pr comment "$pr_number" --body "Stability verification complete: $stable_count/$total_count runs where the relevant test suite passed. Removing ci/verify-stability label. @slonka ready for review."
               continue
             fi
 
