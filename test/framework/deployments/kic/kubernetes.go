@@ -45,14 +45,23 @@ func (t *k8sDeployment) Deploy(cluster framework.Cluster) error {
 	opts := helm.Options{
 		KubectlOptions: cluster.GetKubectlOptions(t.ingressNamespace),
 	}
-	_, err = helm.RunHelmCommandAndGetStdOutE(cluster.GetTesting(), &opts, "install", t.name,
-		"--namespace", t.ingressNamespace,
-		"--repo", "https://charts.konghq.com",
-		"--set", "controller.ingressController.watchNamespaces={"+watchNamespacesVal+"}",
-		"--set", "controller.ingressController.ingressClass="+t.name,
-		"--set", "controller.podAnnotations.kuma\\.io/mesh="+t.mesh,
-		"--set", "gateway.podAnnotations.kuma\\.io/mesh="+t.mesh,
-		"ingress",
+	_, err = retry.DoWithRetryE(
+		cluster.GetTesting(),
+		"helm install Kong Ingress Controller",
+		framework.DefaultRetries,
+		framework.DefaultTimeout,
+		func() (string, error) {
+			_, err := helm.RunHelmCommandAndGetStdOutE(cluster.GetTesting(), &opts, "upgrade", "--install", t.name,
+				"--namespace", t.ingressNamespace,
+				"--repo", "https://charts.konghq.com",
+				"--set", "controller.ingressController.watchNamespaces={"+watchNamespacesVal+"}",
+				"--set", "controller.ingressController.ingressClass="+t.name,
+				"--set", "controller.podAnnotations.kuma\\.io/mesh="+t.mesh,
+				"--set", "gateway.podAnnotations.kuma\\.io/mesh="+t.mesh,
+				"ingress",
+			)
+			return "", err
+		},
 	)
 	if err != nil {
 		return err
