@@ -27,17 +27,11 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.COPILOT_PAT }}
-      - name: Get open pull requests and save to file
-        run: |
-          gh pr list --json number,labels > open_prs.json
-        env:
-          GITHUB_TOKEN: ${{ secrets.COPILOT_PAT }}
-      - name: Process PRs
+      - name: Find PRs with stability labels
         id: process_prs
         run: |
-          cat open_prs.json
-          pr_numbers_with_verify_stability=$(jq -r -c '.[] | select(.labels[]?.name == "ci/verify-stability") | .number' open_prs.json | tr '\n' ' ')
-          pr_numbers_with_verify_stability_merge_master=$(jq -r '.[] | select(.labels[]?.name == "ci/verify-stability-merge-master") | .number' open_prs.json | tr '\n' ' ')
+          pr_numbers_with_verify_stability=$(gh pr list --label "ci/verify-stability" --json number --jq '.[].number' | tr '\n' ' ')
+          pr_numbers_with_verify_stability_merge_master=$(gh pr list --label "ci/verify-stability-merge-master" --json number --jq '.[].number' | tr '\n' ' ')
           echo "PRs with 'ci/verify-stability' label: $pr_numbers_with_verify_stability"
           echo "PRs with 'ci/verify-stability-merge-master' label: $pr_numbers_with_verify_stability_merge_master"
           echo "pr_numbers_with_verify_stability=$pr_numbers_with_verify_stability" >> "$GITHUB_OUTPUT"
