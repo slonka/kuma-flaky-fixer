@@ -47,6 +47,8 @@ func (t *k8sDeployment) Deploy(cluster framework.Cluster) error {
 
 	_, err = helm.RunHelmCommandAndGetStdOutE(cluster.GetTesting(), &opts, "install", "spire",
 		"--namespace", t.namespace,
+		"--wait",
+		"--timeout", "15m0s",
 		"--repo", "https://spiffe.github.io/helm-charts-hardened/",
 		"--set", "global.spire.trustDomain="+t.trustDomain,
 		"--set", "global.spire.tools.kubectl.tag="+t.kubectlVersion,
