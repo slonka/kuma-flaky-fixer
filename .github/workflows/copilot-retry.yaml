@@ -46,7 +46,7 @@ jobs:
           FAILURE_DETAILS=""
 
           ARTIFACT_IDS=$(gh api "repos/$REPO/actions/runs/$RUN_ID/artifacts" \
-            --jq '[.artifacts[] | select(.name | startswith("e2e-reports")) | .id] | .[]')
+            --jq '[.artifacts[] | select(.name | startswith("e2e-reports") or startswith("e2e-debug")) | .id] | .[]')
 
           for artifact_id in $ARTIFACT_IDS; do
             ARTIFACT_NAME=$(gh api "repos/$REPO/actions/artifacts/$artifact_id" --jq '.name')
@@ -111,6 +111,57 @@ jobs:
           ${XML_FAILURES}"
               fi
             done < <(find "/tmp/e2e-reports/$artifact_id" -name "*.xml" 2>/dev/null)
+
+            # Extract debug info from e2e-debug artifacts
+            if [[ "$ARTIFACT_NAME" == e2e-debug-* ]]; then
+              DEBUG_INFO=""
+
+              # report.txt - Ginkgo failure summary
+              while IFS= read -r report_txt; do
+                content=$(head -c 3000 "$report_txt")
+                if [ -n "$content" ]; then
+                  DEBUG_INFO="${DEBUG_INFO}
+
+          #### report.txt
+          \`\`\`
+          ${content}
+          \`\`\`"
+                fi
+              done < <(find "/tmp/e2e-reports/$artifact_id" -name "report.txt" 2>/dev/null)
+
+              # combined.log - last 100 lines
+              while IFS= read -r combined; do
+                content=$(tail -100 "$combined")
+                if [ -n "$content" ]; then
+                  DEBUG_INFO="${DEBUG_INFO}
+
+          #### combined.log (last 100 lines)
+          \`\`\`
+          ${content}
+          \`\`\`"
+                fi
+              done < <(find "/tmp/e2e-reports/$artifact_id" -name "combined.log" 2>/dev/null)
+
+              # CP logs - last 50 lines
+              while IFS= read -r cplog; do
+                content=$(tail -50 "$cplog")
+                if [ -n "$content" ]; then
+                  DEBUG_INFO="${DEBUG_INFO}
+
+          #### $(basename "$cplog") (last 50 lines)
+          \`\`\`
+          ${content}
+          \`\`\`"
+                fi
+              done < <(find "/tmp/e2e-reports/$artifact_id" -name "*cp-logs*" -o -name "*control-plane*.log" 2>/dev/null)
+
+              if [ -n "$DEBUG_INFO" ]; then
+                FAILURE_DETAILS="${FAILURE_DETAILS}
+
+          ### $ARTIFACT_NAME (debug)
+          ${DEBUG_INFO}"
+              fi
+            fi
           done
 
           # Truncate if too long (GitHub comment limit is 65536 chars)
