@@ -72,7 +72,7 @@ func (t *k8sDeployment) Deploy(cluster framework.Cluster) error {
 	if err != nil {
 		return err
 	}
-	err = t.isPodReady(cluster, "app.kubernetes.io/name=spire-controller-manager")
+	err = t.isPodReady(cluster, "app.kubernetes.io/name=spire-controller-manager", framework.DefaultRetries*5)
 	if err != nil {
 		return err
 	}
@@ -80,14 +80,19 @@ func (t *k8sDeployment) Deploy(cluster framework.Cluster) error {
 	return nil
 }
 
-func (t *k8sDeployment) isPodReady(cluster framework.Cluster, selector string) error {
+func (t *k8sDeployment) isPodReady(cluster framework.Cluster, selector string, retries ...int) error {
+	r := framework.DefaultRetries * 3 // spire is fetched from the internet. Increase the timeout to prevent long downloads of images.
+	if len(retries) > 0 {
+		r = retries[0]
+	}
+
 	err := k8s.WaitUntilNumPodsCreatedE(cluster.GetTesting(),
 		cluster.GetKubectlOptions(t.namespace),
 		metav1.ListOptions{
 			LabelSelector: selector,
 		},
 		1,
-		framework.DefaultRetries*3, // spire is fetched from the internet. Increase the timeout to prevent long downloads of images.
+		r,
 		framework.DefaultTimeout)
 	if err != nil {
 		return err
@@ -107,7 +112,7 @@ func (t *k8sDeployment) isPodReady(cluster framework.Cluster, selector string) e
 		if err := k8s.WaitUntilPodAvailableE(cluster.GetTesting(),
 			cluster.GetKubectlOptions(t.namespace),
 			pod.Name,
-			framework.DefaultRetries*3, // spire is fetched from the internet. Increase the timeout to prevent long downloads of images.
+			r,
 			framework.DefaultTimeout); err != nil {
 			return err
 		}
