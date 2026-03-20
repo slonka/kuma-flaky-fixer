@@ -72,10 +72,8 @@ func (t *k8sDeployment) Deploy(cluster framework.Cluster) error {
 	if err != nil {
 		return err
 	}
-	err = t.isPodReady(cluster, "app.kubernetes.io/name=spire-controller-manager")
-	if err != nil {
-		return err
-	}
+	// spire-controller-manager runs as a sidecar in the spire-server pod in this helm chart
+	// version, so it is already covered by the server pod readiness check above.
 
 	return nil
 }
