@@ -1,8 +1,12 @@
 package spire
 
 import (
+	"context"
+	"fmt"
+
 	"github.com/gruntwork-io/terratest/modules/helm"
 	"github.com/gruntwork-io/terratest/modules/k8s"
+	"github.com/gruntwork-io/terratest/modules/retry"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -69,7 +73,37 @@ func (t *k8sDeployment) Deploy(cluster framework.Cluster) error {
 		return err
 	}
 
-	return nil
+	// The spire-controller-manager runs as a sidecar inside the spire-server pod,
+	// so isPodReady cannot detect its readiness. Its admission webhook handles
+	// ClusterSPIFFEID resources. Wait until the webhook service has ready endpoints
+	// before returning, otherwise applying ClusterSPIFFEID immediately after Deploy()
+	// may fail because the webhook is not yet accepting connections.
+	return t.waitForWebhookEndpoints(cluster, "spire-controller-manager-webhook")
+}
+
+// waitForWebhookEndpoints polls the named Endpoints object until it has at least
+// one ready address.
+func (t *k8sDeployment) waitForWebhookEndpoints(cluster framework.Cluster, serviceName string) error {
+	clientset, err := k8s.GetKubernetesClientFromOptionsE(cluster.GetTesting(), cluster.GetKubectlOptions(t.namespace))
+	if err != nil {
+		return err
+	}
+	_, err = retry.DoWithRetryE(cluster.GetTesting(), fmt.Sprintf("wait for webhook endpoints %s", serviceName),
+		framework.DefaultRetries*3, // spire is fetched from the internet. Increase the timeout to prevent long downloads of images.
+		framework.DefaultTimeout,
+		func() (string, error) {
+			ep, err := clientset.CoreV1().Endpoints(t.namespace).Get(context.Background(), serviceName, metav1.GetOptions{})
+			if err != nil {
+				return "", err
+			}
+			for _, subset := range ep.Subsets {
+				if len(subset.Addresses) > 0 {
+					return "ready", nil
+				}
+			}
+			return "", errors.Errorf("no ready endpoints for service %q in namespace %q", serviceName, t.namespace)
+		})
+	return err
 }
 
 func (t *k8sDeployment) isPodReady(cluster framework.Cluster, selector string) error {
