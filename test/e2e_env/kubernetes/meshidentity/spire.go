@@ -67,6 +67,8 @@ spec:
 	})
 
 	E2EAfterAll(func() {
+		// ClusterSPIFFEID is cluster-scoped and not deleted by namespace cleanup
+		Expect(DeleteYamlK8s(workflowRegistration)(kubernetes.Cluster)).To(Succeed())
 		Expect(kubernetes.Cluster.TriggerDeleteNamespace(namespace)).To(Succeed())
 		Expect(kubernetes.Cluster.TriggerDeleteNamespace(spireNamespace)).To(Succeed())
 		Expect(kubernetes.Cluster.DeleteMesh(meshName)).To(Succeed())

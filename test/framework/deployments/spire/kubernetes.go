@@ -56,6 +56,12 @@ func (t *k8sDeployment) Deploy(cluster framework.Cluster) error {
 		return err
 	}
 
+	// Wait for the three core SPIRE components needed for SVID-based mTLS:
+	// - agent: issues SVIDs to workloads
+	// - server: central CA that issues SVIDs to agents
+	// - spiffe-csi-driver: mounts SPIFFE cert dirs into pods
+	// spire-controller-manager runs as a sidecar in the server pod (no standalone pod).
+	// spiffe-oidc-discovery-provider is only needed for JWT SVIDs, not X.509 mTLS.
 	err = t.isPodReady(cluster, "app.kubernetes.io/name=agent")
 	if err != nil {
 		return err
