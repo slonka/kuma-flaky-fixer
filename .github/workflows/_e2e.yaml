@@ -17,7 +17,6 @@ env:
   E2E_PARAM_SIDECAR_CONTAINERS: ${{ fromJSON(inputs.matrix).sidecarContainers }}
   E2E_PARAM_TARGET: ${{ fromJSON(inputs.matrix).target }}
   E2E_PARAM_PARALLELISM: ${{ fromJSON(inputs.matrix).parallelism }}
-  MISE_DISABLE_TOOLS: "golangci-lint,skaffold"
 jobs:
   e2e:
     timeout-minutes: 60
@@ -41,6 +40,7 @@ jobs:
       - uses: jdx/mise-action@6d1e696aa24c1aa1bcc1adea0212707c71ab78a8 # v3.6.1
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          MISE_DISABLE_TOOLS: "golangci-lint,skaffold"
       - run: |
           make build
       - run: |
