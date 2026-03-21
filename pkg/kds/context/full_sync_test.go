@@ -75,6 +75,9 @@ var _ = Describe("Full sync tests", func() {
 		// starting zone CPs. Without this, zone mux clients can hit "connection
 		// refused" on their first dial and trigger the resilient component's base
 		// backoff (5s), consuming most of the 30s Eventually window for sync verification.
+		// Use 127.0.0.1 (IPv4 loopback) explicitly rather than "localhost": on many
+		// Linux systems "localhost" resolves to ::1 (IPv6) first, which fails when the
+		// gRPC server only binds to 0.0.0.0 (IPv4).
 		Eventually(func() error {
 			conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", globalPort), time.Second)
 			if err != nil {
