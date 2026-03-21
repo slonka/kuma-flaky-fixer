@@ -96,6 +96,7 @@ var _ = Describe("Zone Delta Sync", func() {
 		go func() {
 			defer wg.Done()
 			policySync := client_v2.NewKDSSyncClient(
+				context.Background(),
 				core.Log.WithName("kds-sink"),
 				kdsCtx.TypesSentByGlobal,
 				client_v2.NewDeltaKDSStream(clientStream, zoneName, "zone-inst", "", len(kdsCtx.TypesSentByGlobal)),

@@ -174,6 +174,7 @@ func (c *client) startGlobalToZoneSync(ctx context.Context, log logr.Logger, con
 	}()
 
 	syncClient := kds_client_v2.NewKDSSyncClient(
+		stream.Context(),
 		log,
 		c.typesSentByGlobal,
 		deltaStream,
