@@ -63,6 +63,8 @@ var _ = Describe("Full sync tests", func() {
 		cfg.Multizone.Global.KDS.TlsEnabled = false
 		cfg.Multizone.Global.KDS.ZoneInsightFlushInterval = config_types.Duration{Duration: 100 * time.Millisecond}
 		cfg.Mode = config_core.Global
+		// Reduce backoff so a single "connection refused" on first dial doesn't
+		// consume the majority of the 30s Eventually window (default base is 5s).
 		cfg.General.ResilientComponentBaseBackoff = config_types.Duration{Duration: 100 * time.Millisecond}
 		cfg.General.ResilientComponentMaxBackoff = config_types.Duration{Duration: 5 * time.Second}
 		rt := setup.NewTestRuntime(ctx, cfg, globalStore)
@@ -94,6 +96,8 @@ var _ = Describe("Full sync tests", func() {
 			cfg.Store.Type = config_store.MemoryStore
 			cfg.Mode = config_core.Zone
 			cfg.Multizone.Zone.Name = zoneName
+			// Use 127.0.0.1 explicitly: on Linux CI, "localhost" may resolve to ::1
+			// (IPv6) while the gRPC server only binds on IPv4, causing "connection refused".
 			cfg.Multizone.Zone.GlobalAddress = fmt.Sprintf("grpc://127.0.0.1:%d", globalPort)
 			cfg.Multizone.Global.KDS.ZoneInsightFlushInterval = config_types.Duration{Duration: 100 * time.Millisecond}
 			cfg.General.ResilientComponentBaseBackoff = config_types.Duration{Duration: 100 * time.Millisecond}
