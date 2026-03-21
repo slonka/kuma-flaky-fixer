@@ -183,10 +183,21 @@ k3d/configure/cni: k3d/configure/cni/$(K3D_NETWORK_CNI_EFFECTIVE)
 	  echo "[WARNING]: Unsupported K3D CNI '$(K3D_NETWORK_CNI_REQ)', falling back to '$(K3D_NETWORK_CNI_DEFAULT)'" >&2; \
 	fi
 
-# Default: flannel (no action required)
+# Default: flannel - wait for flannel to write subnet.env before pod scheduling begins.
+# Without this, pods fail sandbox creation with "loadFlannelSubnetEnv failed: open
+# /run/flannel/subnet.env: no such file or directory" during slow flannel startup.
 .PHONY: k3d/configure/cni/flannel
 k3d/configure/cni/flannel:
-	@true
+	@TIMES_TRIED=0; \
+	MAX_ALLOWED_TRIES=30; \
+	until docker exec k3d-$(KIND_CLUSTER_NAME)-server-0 test -f /run/flannel/subnet.env 2>/dev/null; do \
+		echo "Waiting for flannel to initialize subnet.env..." && sleep 2; \
+		TIMES_TRIED=$$((TIMES_TRIED+1)); \
+		if [[ $$TIMES_TRIED -ge $$MAX_ALLOWED_TRIES ]]; then \
+			echo "Flannel subnet.env not created after timeout"; \
+			exit 1; \
+		fi; \
+	done
 
 # Calico (runs when K3D_NETWORK_CNI=calico)
 .PHONY: k3d/configure/cni/calico
