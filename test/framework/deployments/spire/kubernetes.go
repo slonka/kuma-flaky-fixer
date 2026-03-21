@@ -71,11 +71,14 @@ func (t *k8sDeployment) Deploy(cluster framework.Cluster) error {
 	if err != nil {
 		return err
 	}
-	err = t.isPodReady(cluster, "app.kubernetes.io/name=spire-controller-manager")
-	if err != nil {
-		return err
-	}
 
+	// Wait for the spire-controller-manager webhook Endpoints to have at least one
+	// ready address before returning. The controller-manager may run as a sidecar
+	// inside spire-server-0 or as a standalone pod depending on the helm chart
+	// version. Using the Endpoints object (rather than a pod selector) makes this
+	// robust to both topologies: the endpoint controller only populates addresses
+	// after the container's readiness probe passes, ensuring the webhook is
+	// accepting requests before BeforeAll applies any ClusterSPIFFEID resources.
 	return t.waitForWebhookEndpoints(cluster, "spire-controller-manager-webhook")
 }
 
