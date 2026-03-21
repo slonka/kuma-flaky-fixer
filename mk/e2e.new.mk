@@ -93,9 +93,14 @@ test/e2e/list:
 .PHONY: test/e2e/k8s/start
 test/e2e/k8s/start:
 	# Pre-install all mise tools serially before parallel cluster starts.
-	# Without this, parallel make subprocesses race to auto-install tools
-	# excluded by MISE_DISABLE_TOOLS (e.g. golangci-lint) when they parse
-	# mk/dev.mk, causing EEXIST failures on the runtime symlink creation.
+	# The jdx/mise-action step sets MISE_DISABLE_TOOLS=golangci-lint,skaffold
+	# (scoped to that step only), so those tools are absent when this recipe
+	# runs. Each parallel sub-make re-parses mk/dev.mk and evaluates
+	# $(shell $(MISE) which golangci-lint), which triggers mise auto-install.
+	# Two parallel processes racing to create the runtime symlink fail with:
+	#   mise ERROR failed to ln -sf ./2.11.3 golangci-lint/latest (EEXIST)
+	# Running $(MISE) install first ensures tools are present before any
+	# subprocess parses the Makefile, eliminating the race condition.
 	$(MISE) install
 	$(MAKE) -j $(K8SCLUSTERS_START_TARGETS)
 	$(MAKE) $(K8SCLUSTERS_LOAD_IMAGES_TARGETS) # execute after start targets
