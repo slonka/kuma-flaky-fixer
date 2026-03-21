@@ -197,6 +197,8 @@ k3d/configure/cni/flannel:
 		TIMES_TRIED=$$((TIMES_TRIED+1)); \
 		if [[ $$TIMES_TRIED -ge $$MAX_ALLOWED_TRIES ]]; then \
 			echo "Flannel subnet.env not created after 240s timeout"; \
+			echo "Contents of /run/flannel/:"; \
+			docker exec k3d-$(KIND_CLUSTER_NAME)-server-0 ls -la /run/flannel/ 2>/dev/null || echo "(directory not found)"; \
 			exit 1; \
 		fi; \
 	done; \
