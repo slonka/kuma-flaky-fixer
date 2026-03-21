@@ -111,7 +111,14 @@ var _ = Describe("Full sync tests", func() {
 		// Wait for all stores to reach their expected final state before stopping CPs.
 		// Checking against the golden files directly is the most reliable signal that
 		// both sync directions (zone→global and global→zone) have fully completed.
+		//
+		// Check zone stores before global: once all zone stores match, the global store
+		// is guaranteed to have received zone→global resources, so the global check
+		// completes almost immediately rather than potentially waiting up to 30s.
 		for zoneName, zoneStore := range zones {
+			if zoneName == "global" {
+				continue
+			}
 			zoneName := zoneName
 			zoneStore := zoneStore
 			Eventually(func(g Gomega) {
@@ -120,6 +127,11 @@ var _ = Describe("Full sync tests", func() {
 				g.Expect(out).To(matchers.MatchGoldenEqual(folder, zoneName+".golden.yaml"))
 			}, "30s", "100ms").Should(Succeed())
 		}
+		Eventually(func(g Gomega) {
+			out, err := test_store.ExtractResources(ctx, globalStore)
+			g.Expect(err).ToNot(HaveOccurred())
+			g.Expect(out).To(matchers.MatchGoldenEqual(folder, "global.golden.yaml"))
+		}, "30s", "100ms").Should(Succeed())
 		// All stores match their golden files; stop the CPs.
 		closeOnce.Do(func() { close(done) })
 		wg.Wait()
