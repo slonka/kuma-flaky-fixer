@@ -94,10 +94,13 @@ test/e2e/list:
 test/e2e/k8s/start:
 	# Pre-install all mise tools serially before parallel cluster starts.
 	# Without this, parallel make subprocesses race to auto-install tools
-	# excluded by MISE_DISABLE_TOOLS (e.g. golangci-lint) when they parse
-	# mk/dev.mk, causing EEXIST failures on the runtime symlink creation.
-	# MISE_DISABLE_TOOLS is cleared explicitly so that even if it is set in
-	# the environment (e.g. inherited from a CI step), all tools are installed.
+	# that are excluded by MISE_DISABLE_TOOLS in the CI workflow step
+	# (.github/workflows/_e2e.yaml: golangci-lint, skaffold). Any mise
+	# command parsed from mk/dev.mk (e.g. $(MISE) which go evaluated via
+	# :=) triggers mise auto-install for ALL missing tools, and both
+	# parallel processes race to rebuild runtime symlinks, failing with
+	# EEXIST. MISE_DISABLE_TOOLS is cleared explicitly here so that all
+	# tools are installed regardless of any inherited CI environment value.
 	MISE_DISABLE_TOOLS= $(MISE) install
 	$(MAKE) -j $(K8SCLUSTERS_START_TARGETS)
 	$(MAKE) $(K8SCLUSTERS_LOAD_IMAGES_TARGETS) # execute after start targets
@@ -115,10 +118,13 @@ test/e2e/k8s/stop: $(K8SCLUSTERS_STOP_TARGETS)
 test/e2e/debug: $(E2E_DEPS_TARGETS)
 	# Pre-install all mise tools serially before parallel cluster starts.
 	# Without this, parallel make subprocesses race to auto-install tools
-	# excluded by MISE_DISABLE_TOOLS (e.g. golangci-lint) when they parse
-	# mk/dev.mk, causing EEXIST failures on the runtime symlink creation.
-	# MISE_DISABLE_TOOLS is cleared explicitly so that even if it is set in
-	# the environment (e.g. inherited from a CI step), all tools are installed.
+	# that are excluded by MISE_DISABLE_TOOLS in the CI workflow step
+	# (.github/workflows/_e2e.yaml: golangci-lint, skaffold). Any mise
+	# command parsed from mk/dev.mk (e.g. $(MISE) which go evaluated via
+	# :=) triggers mise auto-install for ALL missing tools, and both
+	# parallel processes race to rebuild runtime symlinks, failing with
+	# EEXIST. MISE_DISABLE_TOOLS is cleared explicitly here so that all
+	# tools are installed regardless of any inherited CI environment value.
 	MISE_DISABLE_TOOLS= $(MISE) install
 	$(MAKE) -j $(K8SCLUSTERS_START_TARGETS) build/kumactl images
 	$(MAKE) docker/tag
