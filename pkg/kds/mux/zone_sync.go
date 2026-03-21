@@ -188,6 +188,7 @@ func (g *KDSSyncServiceServer) ZoneToGlobalSync(stream mesh_proto.KDSSyncService
 	go func() {
 		kdsStream := kds_client_v2.NewDeltaKDSStream(stream, zone, g.instanceID, "", len(g.typesSentByZone))
 		sink := kds_client_v2.NewKDSSyncClient(
+			stream.Context(),
 			logger,
 			g.typesSentByZone,
 			kdsStream,

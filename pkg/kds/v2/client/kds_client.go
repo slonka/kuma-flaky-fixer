@@ -1,6 +1,7 @@
 package client
 
 import (
+	"context"
 	std_errors "errors"
 	"io"
 	"time"
@@ -53,6 +54,7 @@ type KDSSyncClient interface {
 }
 
 type kdsSyncClient struct {
+	ctx             context.Context
 	log             logr.Logger
 	resourceTypes   []core_model.ResourceType
 	callbacks       *Callbacks
@@ -61,6 +63,7 @@ type kdsSyncClient struct {
 }
 
 func NewKDSSyncClient(
+	ctx context.Context,
 	log logr.Logger,
 	rt []core_model.ResourceType,
 	kdsStream DeltaKDSStream,
@@ -68,6 +71,7 @@ func NewKDSSyncClient(
 	responseBackoff time.Duration,
 ) KDSSyncClient {
 	return &kdsSyncClient{
+		ctx:             ctx,
 		log:             log,
 		resourceTypes:   rt,
 		kdsStream:       kdsStream,
@@ -133,7 +137,11 @@ func (s *kdsSyncClient) Receive() error {
 		if !received.IsInitialRequest {
 			// Execute backoff only on subsequent request.
 			// When client first connects, the server sends empty DeltaDiscoveryResponse for every resource type.
-			time.Sleep(s.responseBackoff)
+			select {
+			case <-s.ctx.Done():
+				return s.ctx.Err()
+			case <-time.After(s.responseBackoff):
+			}
 		}
 		s.log.V(1).Info("sending ACK", "type", received.Type)
 		if err := s.kdsStream.ACK(received.Type); err != nil {
