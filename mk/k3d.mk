@@ -183,10 +183,22 @@ k3d/configure/cni: k3d/configure/cni/$(K3D_NETWORK_CNI_EFFECTIVE)
 	  echo "[WARNING]: Unsupported K3D CNI '$(K3D_NETWORK_CNI_REQ)', falling back to '$(K3D_NETWORK_CNI_DEFAULT)'" >&2; \
 	fi
 
-# Default: flannel (no action required)
+# Default: flannel - wait for subnet.env to exist before continuing.
+# k3s writes /run/flannel/subnet.env when the flannel VXLAN is ready; pods
+# that need to create a network sandbox will fail with
+# "loadFlannelSubnetEnv: no such file or directory" until that file appears.
 .PHONY: k3d/configure/cni/flannel
 k3d/configure/cni/flannel:
-	@true
+	@echo "Waiting for flannel subnet.env on k3d node..."; \
+	for i in $$(seq 1 60); do \
+		if docker exec k3d-$(KIND_CLUSTER_NAME)-server-0 test -f /run/flannel/subnet.env 2>/dev/null; then \
+			echo "flannel subnet.env is ready (attempt $$i)"; \
+			exit 0; \
+		fi; \
+		echo "  attempt $$i/60 – not ready yet, sleeping 5s..."; \
+		sleep 5; \
+	done; \
+	echo "Timeout waiting for flannel subnet.env"; exit 1
 
 # Calico (runs when K3D_NETWORK_CNI=calico)
 .PHONY: k3d/configure/cni/calico
