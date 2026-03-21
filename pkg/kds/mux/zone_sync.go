@@ -278,7 +278,11 @@ func (g *KDSSyncServiceServer) storeStreamConnection(ctx context.Context, zone s
 	// In this case, all instances will try to update Zone Insight which will result in conflicts.
 	// Since it's unusual to immediately execute envoy admin rpcs after zone is connected, 0-10s delay should be fine.
 	// #nosec G404 - math rand is enough
-	time.Sleep(time.Duration(rand.Int31n(10000)) * time.Millisecond)
+	select {
+	case <-time.After(time.Duration(rand.Int31n(10000)) * time.Millisecond):
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 
 	zoneInsight := system.NewZoneInsightResource()
 	return core_manager.Upsert(ctx, g.resManager, key, zoneInsight, func(resource core_model.Resource) error {
