@@ -93,7 +93,7 @@ test/e2e/list:
 .PHONY: test/e2e/k8s/start
 test/e2e/k8s/start:
 	$(MISE) install
-	$(MAKE) $(K8SCLUSTERS_START_TARGETS)
+	$(MAKE) -j $(K8SCLUSTERS_START_TARGETS)
 	$(MAKE) $(K8SCLUSTERS_LOAD_IMAGES_TARGETS) # execute after start targets
 
 .PHONY: test/e2e/k8s/stop
