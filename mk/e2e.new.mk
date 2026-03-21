@@ -92,6 +92,10 @@ test/e2e/list:
 
 .PHONY: test/e2e/k8s/start
 test/e2e/k8s/start:
+	# Pre-install all mise tools serially before parallel cluster starts.
+	# Without this, parallel make subprocesses race to auto-install tools
+	# excluded by MISE_DISABLE_TOOLS (e.g. golangci-lint) when they parse
+	# mk/dev.mk, causing EEXIST failures on the runtime symlink creation.
 	$(MISE) install
 	$(MAKE) -j $(K8SCLUSTERS_START_TARGETS)
 	$(MAKE) $(K8SCLUSTERS_LOAD_IMAGES_TARGETS) # execute after start targets
