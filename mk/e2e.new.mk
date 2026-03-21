@@ -90,6 +90,14 @@ E2E_ENV_VARS += PATH=$(CI_TOOLS_BIN_DIR):$$PATH
 test/e2e/list:
 	@echo $(ALL_TESTS)
 
+# NOTE: $(MISE) install MUST run serially before the parallel -j cluster starts.
+# When make spawns parallel subprocesses for $(K8SCLUSTERS_START_TARGETS), each
+# subprocess parses the full Makefile and evaluates $(shell $(MISE) which <tool>)
+# expressions in mk/dev.mk. If any tool is not yet installed, mise auto-install
+# triggers in every subprocess simultaneously, and they race to create runtime
+# symlinks (e.g. golangci-lint/latest), causing EEXIST failures. Running
+# $(MISE) install once here ensures all tools are pre-installed before any
+# parallel subprocess starts. mise install is idempotent when tools already exist.
 .PHONY: test/e2e/k8s/start
 test/e2e/k8s/start:
 	# Pre-install all mise tools serially before parallel cluster starts.
