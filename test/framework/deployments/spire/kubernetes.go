@@ -1,8 +1,11 @@
 package spire
 
 import (
+	"context"
+
 	"github.com/gruntwork-io/terratest/modules/helm"
 	"github.com/gruntwork-io/terratest/modules/k8s"
+	"github.com/gruntwork-io/terratest/modules/retry"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -69,7 +72,28 @@ func (t *k8sDeployment) Deploy(cluster framework.Cluster) error {
 		return err
 	}
 
-	return nil
+	return t.waitForWebhookEndpoints(cluster, "spire-controller-manager-webhook")
+}
+
+func (t *k8sDeployment) waitForWebhookEndpoints(cluster framework.Cluster, webhookName string) error {
+	clientset, err := k8s.GetKubernetesClientFromOptionsE(cluster.GetTesting(), cluster.GetKubectlOptions(t.namespace))
+	if err != nil {
+		return errors.Wrapf(err, "error getting Kubernetes client")
+	}
+
+	_, err = retry.DoWithRetryE(cluster.GetTesting(), "wait for webhook endpoints", framework.DefaultRetries*3, framework.DefaultTimeout, func() (string, error) {
+		endpoints, endpointErr := clientset.CoreV1().Endpoints(t.namespace).Get(context.Background(), webhookName, metav1.GetOptions{})
+		if endpointErr != nil {
+			return "", endpointErr
+		}
+		for _, subset := range endpoints.Subsets {
+			if len(subset.Addresses) > 0 {
+				return "ready", nil
+			}
+		}
+		return "", errors.Errorf("webhook %q has no ready endpoints", webhookName)
+	})
+	return err
 }
 
 func (t *k8sDeployment) isPodReady(cluster framework.Cluster, selector string) error {
