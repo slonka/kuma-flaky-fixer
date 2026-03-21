@@ -91,6 +91,16 @@ test/e2e/list:
 	@echo $(ALL_TESTS)
 
 .PHONY: test/e2e/k8s/start
+# Run $(MISE) install serially before starting clusters in parallel.
+# The CI workflow sets MISE_DISABLE_TOOLS=golangci-lint,skaffold during the
+# jdx/mise-action setup step, so those tools are not pre-installed. When the
+# cluster start targets (kuma-1, kuma-2) run in parallel, each spawned make
+# subprocess parses the Makefile and evaluates $(shell $(MISE) which skaffold),
+# causing mise to auto-install skaffold in both processes simultaneously. Both
+# processes then race to create the skaffold/latest symlink, and the second
+# one fails with "File exists (os error 17)". Running $(MISE) install once
+# before the parallel starts ensures all tools are present, so neither
+# subprocess triggers auto-install. $(MISE) install is idempotent.
 test/e2e/k8s/start:
 	# Pre-install all mise tools serially before parallel cluster starts.
 	# Without this, parallel make subprocesses race to auto-install tools
