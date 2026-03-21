@@ -84,6 +84,10 @@ func (t *k8sDeployment) waitForWebhookEndpoints(cluster framework.Cluster, webho
 	if err != nil {
 		return errors.Wrapf(err, "error getting Kubernetes client")
 	}
+	err = t.isPodReady(cluster, "app.kubernetes.io/name=spire-controller-manager")
+	if err != nil {
+		return err
+	}
 
 	_, err = retry.DoWithRetryE(cluster.GetTesting(), fmt.Sprintf("wait for %s webhook endpoints", webhookName), framework.DefaultRetries*6, framework.DefaultTimeout, func() (string, error) {
 		endpoints, endpointErr := clientset.CoreV1().Endpoints(t.namespace).Get(context.Background(), webhookName, metav1.GetOptions{})
