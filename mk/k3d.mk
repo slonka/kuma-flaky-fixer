@@ -246,6 +246,8 @@ k3d/wait:
 		echo "Waiting for the cluster to come up" && sleep 1; \
 		TIMES_TRIED=$$((TIMES_TRIED+1)); \
 		if [[ $$TIMES_TRIED -ge $$MAX_ALLOWED_TRIES ]]; then \
+			echo "=== kube-system Events ==="; \
+			KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) get events -n kube-system --sort-by='.lastTimestamp' || true; \
 			KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) get pods -n kube-system -o name | while read pod; do \
 				echo "=== Describe $$pod ==="; \
 				KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) -n kube-system describe $$pod; \
