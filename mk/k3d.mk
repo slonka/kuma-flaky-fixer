@@ -191,12 +191,12 @@ k3d/configure/cni: k3d/configure/cni/$(K3D_NETWORK_CNI_EFFECTIVE)
 .PHONY: k3d/configure/cni/flannel
 k3d/configure/cni/flannel:
 	@TIMES_TRIED=0; \
-	MAX_ALLOWED_TRIES=30; \
+	MAX_ALLOWED_TRIES=120; \
 	until docker exec k3d-$(KIND_CLUSTER_NAME)-server-0 test -f /run/flannel/subnet.env 2>/dev/null; do \
 		echo "Waiting for flannel to initialize subnet.env..." && sleep 2; \
 		TIMES_TRIED=$$((TIMES_TRIED+1)); \
 		if [[ $$TIMES_TRIED -ge $$MAX_ALLOWED_TRIES ]]; then \
-			echo "Flannel subnet.env not created after 60s timeout"; \
+			echo "Flannel subnet.env not created after 240s timeout"; \
 			exit 1; \
 		fi; \
 	done; \
