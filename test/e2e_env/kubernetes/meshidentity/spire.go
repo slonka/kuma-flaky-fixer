@@ -2,6 +2,7 @@ package meshidentity
 
 import (
 	"fmt"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -121,7 +122,7 @@ spec:
 			resp, err := client.CollectEchoResponse(kubernetes.Cluster, "demo-client", fmt.Sprintf("test-server.%s.svc.cluster.local:80", namespace), client.FromKubernetesPod(namespace, "demo-client"))
 			g.Expect(err).ToNot(HaveOccurred())
 			g.Expect(resp.Instance).To(Equal("test-server-spire"))
-		}, "2m", "1s").MustPassRepeatedly(5).Should(Succeed())
+		}).WithTimeout(2 * time.Minute).WithPolling(time.Second).MustPassRepeatedly(5).Should(Succeed())
 
 		admin, err := kubernetes.Cluster.GetOrCreateAdminTunnel(portforward.Spec{
 			AppName:   "test-server",
