@@ -71,11 +71,10 @@ func (t *k8sDeployment) Deploy(cluster framework.Cluster) error {
 	if err != nil {
 		return err
 	}
-	err = t.isPodReady(cluster, "app.kubernetes.io/name=spire-controller-manager")
-	if err != nil {
-		return err
-	}
-
+	// spire-controller-manager runs as a sidecar inside the spire-server pod,
+	// not as a standalone Deployment, so there is no pod with the label
+	// app.kubernetes.io/name=spire-controller-manager. Waiting for
+	// webhook endpoints is a stronger and correct readiness signal.
 	return t.waitForWebhookEndpoints(cluster, "spire-controller-manager-webhook")
 }
 
