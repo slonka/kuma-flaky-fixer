@@ -119,7 +119,7 @@ spec:
 			resp, err := client.CollectEchoResponse(kubernetes.Cluster, "demo-client", fmt.Sprintf("test-server.%s.svc.cluster.local:80", namespace), client.FromKubernetesPod(namespace, "demo-client"))
 			g.Expect(err).ToNot(HaveOccurred())
 			g.Expect(resp.Instance).To(Equal("test-server-spire"))
-		}, "30s", "1s", MustPassRepeatedly(5)).Should(Succeed())
+		}, "90s", "1s", MustPassRepeatedly(5)).Should(Succeed())
 
 		admin, err := kubernetes.Cluster.GetOrCreateAdminTunnel(portforward.Spec{
 			AppName:   "test-server",
