@@ -56,7 +56,7 @@ kind/start: ${KUBECONFIG_DIR} kind/setup-docker-credentials
 .PHONY: kind/wait
 kind/wait:
 	@TIMES_TRIED=0; \
-	MAX_ALLOWED_TRIES=30; \
+	MAX_ALLOWED_TRIES=60; \
 	until KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) wait -n kube-system --timeout=5s --for condition=Ready --all pods; do \
 		echo "Waiting for the cluster to come up" && sleep 1; \
 		TIMES_TRIED=$$((TIMES_TRIED+1)); \
