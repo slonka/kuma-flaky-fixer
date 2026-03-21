@@ -91,7 +91,14 @@ test/e2e/list:
 	@echo $(ALL_TESTS)
 
 .PHONY: test/e2e/k8s/start
-test/e2e/k8s/start: $(K8SCLUSTERS_START_TARGETS)
+test/e2e/k8s/start:
+	# Run mise install serially first to prevent a race condition: when make -j2 starts
+	# kuma-1 and kuma-2 in parallel, each subprocess parses the Makefile and evaluates
+	# $(shell $(MISE) which golangci-lint). If golangci-lint is not pre-installed, both
+	# subprocesses trigger mise auto-install simultaneously and race to rebuild symlinks,
+	# failing with EEXIST. Running mise install once serially ensures all tools are present.
+	$(MISE) install
+	$(MAKE) -j $(K8SCLUSTERS_START_TARGETS)
 	$(MAKE) $(K8SCLUSTERS_LOAD_IMAGES_TARGETS) # execute after start targets
 
 .PHONY: test/e2e/k8s/stop
