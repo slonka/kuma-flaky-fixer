@@ -119,8 +119,6 @@ var _ = Describe("Full sync tests", func() {
 			if zoneName == "global" {
 				continue
 			}
-			zoneName := zoneName
-			zoneStore := zoneStore
 			Eventually(func(g Gomega) {
 				out, err := test_store.ExtractResources(ctx, zoneStore)
 				g.Expect(err).ToNot(HaveOccurred())
