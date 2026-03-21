@@ -111,6 +111,10 @@ test/e2e/k8s/stop: $(K8SCLUSTERS_STOP_TARGETS)
 # Run only with -j and K8S_CLUSTER_TOOL=k3d (which is the default value)
 .PHONY: test/e2e/debug
 test/e2e/debug: $(E2E_DEPS_TARGETS)
+	# Pre-install all mise tools serially before parallel cluster starts.
+	# Without this, parallel make subprocesses race to auto-install tools
+	# excluded by MISE_DISABLE_TOOLS (e.g. golangci-lint) when they parse
+	# mk/dev.mk, causing EEXIST failures on the runtime symlink creation.
 	$(MISE) install
 	$(MAKE) -j $(K8SCLUSTERS_START_TARGETS) build/kumactl images
 	$(MAKE) docker/tag
