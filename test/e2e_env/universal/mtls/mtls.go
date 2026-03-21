@@ -145,6 +145,9 @@ mtls:
     mode: PERMISSIVE`, meshName)
 		Expect(universal.Cluster.Install(YamlUniversal(meshYaml))).To(Succeed())
 
+		By("Wait for mTLS config to propagate to all dataplanes")
+		trafficAllowed("test-server.mesh")
+
 		By("inside-mesh communication never fails")
 		Consistently(func(g Gomega) {
 			_, stderr, err := curlAddr("test-server.mesh")
