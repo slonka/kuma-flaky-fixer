@@ -1,7 +1,9 @@
 package gateway
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"net"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -121,21 +123,30 @@ spec:
 		defer GinkgoRecover()
 
 		var demoClientPod string
+		// Use a 5m timeout to tolerate the old pod remaining in Terminating
+		// state for an extended period after KillAppPod, which causes
+		// PodNameOfApp to see 2 pods (old Terminating + new Running) and
+		// fail until the old one is fully removed.
 		Eventually(func(g Gomega) {
 			var err error
 			demoClientPod, err = PodNameOfApp(kubernetes.Cluster, "demo-client", waitingClientNamespace)
 			g.Expect(err).ToNot(HaveOccurred())
-		}, "2m", "1s").Should(Succeed())
+		}, "5m", "1s").Should(Succeed())
 
 		cmd := []string{"telnet", gatewayHost, "8080"}
-		// We pass in a stdin that blocks so that telnet will keep the
-		// connection open
+		// Send a partial HTTP request (request line + Host header, no
+		// terminating blank line) so that Envoy keeps the TCP connection
+		// open waiting for the rest of the headers. Without this, a raw
+		// connection with no HTTP data may be closed by Envoy before
+		// MustPassRepeatedly can accumulate the required number of
+		// consecutive failures.
+		partialHTTP := []byte(fmt.Sprintf("GET / HTTP/1.1\r\nHost: %s\r\n", gatewayHost))
 		_, _, _ = kubernetes.Cluster.ExecWithOptions(ExecOptions{
 			Command:            cmd,
 			Namespace:          waitingClientNamespace,
 			PodName:            demoClientPod,
 			ContainerName:      "demo-client",
-			Stdin:              &BlockingReader{},
+			Stdin:              io.MultiReader(bytes.NewReader(partialHTTP), &BlockingReader{}),
 			CaptureStdout:      true,
 			CaptureStderr:      true,
 			PreserveWhitespace: false,
