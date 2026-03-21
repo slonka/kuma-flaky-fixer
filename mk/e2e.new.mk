@@ -96,7 +96,9 @@ test/e2e/k8s/start:
 	# Without this, parallel make subprocesses race to auto-install tools
 	# excluded by MISE_DISABLE_TOOLS (e.g. golangci-lint) when they parse
 	# mk/dev.mk, causing EEXIST failures on the runtime symlink creation.
-	$(MISE) install
+	# MISE_DISABLE_TOOLS is cleared explicitly so that even if it is set in
+	# the environment (e.g. inherited from a CI step), all tools are installed.
+	MISE_DISABLE_TOOLS= $(MISE) install
 	$(MAKE) -j $(K8SCLUSTERS_START_TARGETS)
 	$(MAKE) $(K8SCLUSTERS_LOAD_IMAGES_TARGETS) # execute after start targets
 
@@ -115,7 +117,9 @@ test/e2e/debug: $(E2E_DEPS_TARGETS)
 	# Without this, parallel make subprocesses race to auto-install tools
 	# excluded by MISE_DISABLE_TOOLS (e.g. golangci-lint) when they parse
 	# mk/dev.mk, causing EEXIST failures on the runtime symlink creation.
-	$(MISE) install
+	# MISE_DISABLE_TOOLS is cleared explicitly so that even if it is set in
+	# the environment (e.g. inherited from a CI step), all tools are installed.
+	MISE_DISABLE_TOOLS= $(MISE) install
 	$(MAKE) -j $(K8SCLUSTERS_START_TARGETS) build/kumactl images
 	$(MAKE) docker/tag
 	$(MAKE) $(K8SCLUSTERS_LOAD_IMAGES_TARGETS) # K3D is able to load images before the cluster is ready. It retries if cluster is not able to handle images yet.
