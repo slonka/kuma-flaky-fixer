@@ -92,6 +92,15 @@ test/e2e/list:
 
 .PHONY: test/e2e/k8s/start
 test/e2e/k8s/start:
+	# IMPORTANT: $(MISE) install MUST run before the parallel -j invocation.
+	# Each parallel make subprocess parses the full Makefile at startup, which
+	# evaluates $(shell $(MISE) which golangci-lint) in mk/dev.mk. If those tools
+	# are not yet installed, mise auto-install triggers in every subprocess
+	# simultaneously, and they race to create the same runtime symlink, causing:
+	#   mise ERROR failed to ln -sf ./2.11.3 golangci-lint/latest
+	#   mise ERROR File exists (os error 17)
+	# Running mise install once serially here pre-installs all tools so that
+	# subprocess Makefile parsing is a read-only lookup with no symlink creation.
 	$(MISE) install
 	$(MAKE) -j $(K8SCLUSTERS_START_TARGETS)
 	$(MAKE) $(K8SCLUSTERS_LOAD_IMAGES_TARGETS) # execute after start targets
@@ -107,6 +116,8 @@ test/e2e/k8s/stop: $(K8SCLUSTERS_STOP_TARGETS)
 # Run only with -j and K8S_CLUSTER_TOOL=k3d (which is the default value)
 .PHONY: test/e2e/debug
 test/e2e/debug: $(E2E_DEPS_TARGETS)
+	# IMPORTANT: $(MISE) install MUST run before the parallel -j invocation.
+	# See the comment in test/e2e/k8s/start for the full explanation.
 	$(MISE) install
 	$(MAKE) -j $(K8SCLUSTERS_START_TARGETS) build/kumactl images
 	$(MAKE) docker/tag
