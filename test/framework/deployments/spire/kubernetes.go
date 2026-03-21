@@ -69,6 +69,16 @@ func (t *k8sDeployment) Deploy(cluster framework.Cluster) error {
 		return err
 	}
 
+	// Wait for the controller-manager webhook service to have endpoints.
+	// The controller-manager runs as a sidecar in the spire-server pod and serves
+	// admission webhooks for ClusterSPIFFEID resources. The pod can be Available
+	// before the webhook server is ready to accept connections.
+	k8s.WaitUntilServiceAvailable(cluster.GetTesting(),
+		cluster.GetKubectlOptions(t.namespace),
+		"spire-controller-manager-webhook",
+		framework.DefaultRetries*3,
+		framework.DefaultTimeout)
+
 	return nil
 }
 
