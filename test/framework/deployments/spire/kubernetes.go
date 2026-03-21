@@ -71,6 +71,10 @@ func (t *k8sDeployment) Deploy(cluster framework.Cluster) error {
 	if err != nil {
 		return err
 	}
+	err = t.isPodReady(cluster, "app.kubernetes.io/name=spire-controller-manager")
+	if err != nil {
+		return err
+	}
 
 	return t.waitForWebhookEndpoints(cluster, "spire-controller-manager-webhook")
 }
