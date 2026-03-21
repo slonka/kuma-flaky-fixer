@@ -69,8 +69,11 @@ spec:
 	})
 
 	E2EAfterAll(func() {
-		// ClusterSPIFFEID is cluster-scoped and not cleaned up by namespace deletion
-		Expect(DeleteYamlK8s(workflowRegistration)(kubernetes.Cluster)).To(Succeed())
+		// ClusterSPIFFEID is cluster-scoped and not cleaned up by namespace deletion.
+		// Use --ignore-not-found to avoid retrying 30 times when the resource doesn't exist
+		// (e.g. when BeforeAll failed before applying it), which would block remaining cleanup.
+		Expect(k8s.RunKubectlE(kubernetes.Cluster.GetTesting(), kubernetes.Cluster.GetKubectlOptions(),
+			"delete", "--ignore-not-found", "clusterspiffeid", "spire-registration")).To(Succeed())
 		Expect(kubernetes.Cluster.TriggerDeleteNamespace(namespace)).To(Succeed())
 		Expect(kubernetes.Cluster.TriggerDeleteNamespace(spireNamespace)).To(Succeed())
 		Expect(kubernetes.Cluster.DeleteMesh(meshName)).To(Succeed())
