@@ -63,7 +63,12 @@ func (r *resilientComponent) Start(stop <-chan struct{}) error {
 			backoff = r.newBackoff()
 		}
 		dur, _ := backoff.Next()
-		<-time.After(dur)
+		select {
+		case <-stop:
+			r.log.Info("done")
+			return nil
+		case <-time.After(dur):
+		}
 	}
 }
 
