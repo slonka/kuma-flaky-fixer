@@ -63,6 +63,9 @@ var _ = Describe("Full sync tests", func() {
 		cfg.Multizone.Global.KDS.TlsEnabled = false
 		cfg.Multizone.Global.KDS.ZoneInsightFlushInterval = config_types.Duration{Duration: 100 * time.Millisecond}
 		cfg.Mode = config_core.Global
+		// Reduce resilient component backoff so that any transient connection failure
+		// causes a fast reconnect rather than the default 5s base backoff, which would
+		// consume most of the 30s Eventually window for sync verification.
 		cfg.General.ResilientComponentBaseBackoff = config_types.Duration{Duration: 100 * time.Millisecond}
 		cfg.General.ResilientComponentMaxBackoff = config_types.Duration{Duration: 5 * time.Second}
 		rt := setup.NewTestRuntime(ctx, cfg, globalStore)
@@ -75,8 +78,11 @@ var _ = Describe("Full sync tests", func() {
 		}()
 		// Wait for the global CP's gRPC server to be accepting connections before
 		// starting zone CPs. Without this, zone mux clients can hit "connection
-		// refused" on their first dial and trigger a resilient component backoff,
-		// delaying sync and potentially exhausting the 30s Eventually window.
+		// refused" on their first dial and trigger the resilient component's base
+		// backoff (5s), consuming most of the 30s Eventually window for sync verification.
+		// Use 127.0.0.1 (IPv4 loopback) explicitly rather than "localhost": on many
+		// Linux systems "localhost" resolves to ::1 (IPv6) first, which fails when the
+		// gRPC server only binds to 0.0.0.0 (IPv4).
 		Eventually(func() error {
 			conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", globalPort), time.Second)
 			if err != nil {
@@ -94,8 +100,12 @@ var _ = Describe("Full sync tests", func() {
 			cfg.Store.Type = config_store.MemoryStore
 			cfg.Mode = config_core.Zone
 			cfg.Multizone.Zone.Name = zoneName
+			// Use 127.0.0.1 (IPv4 loopback) explicitly rather than "localhost": on many
+			// Linux systems "localhost" resolves to ::1 (IPv6) first, which fails when the
+			// gRPC server only binds to 0.0.0.0 (IPv4).
 			cfg.Multizone.Zone.GlobalAddress = fmt.Sprintf("grpc://127.0.0.1:%d", globalPort)
 			cfg.Multizone.Global.KDS.ZoneInsightFlushInterval = config_types.Duration{Duration: 100 * time.Millisecond}
+			// Same as global: reduce resilient component backoff so reconnects are fast.
 			cfg.General.ResilientComponentBaseBackoff = config_types.Duration{Duration: 100 * time.Millisecond}
 			cfg.General.ResilientComponentMaxBackoff = config_types.Duration{Duration: 5 * time.Second}
 			rt := setup.NewTestRuntime(ctx, cfg, zoneStore)
