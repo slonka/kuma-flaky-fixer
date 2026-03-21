@@ -213,7 +213,7 @@ endif
 .PHONY: k3d/configure/metallb
 k3d/configure/metallb:
 	@KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) apply -f $(METALLB_MANIFESTS)
-	@KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) wait --timeout=120s --for=condition=Ready -n $(METALLB_NAMESPACE) --all pods
+	@KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) wait --timeout=300s --for=condition=Ready -n $(METALLB_NAMESPACE) --all pods
 	@# Construct a valid address space from the docker network and the template IPAddressPool
 	@# Make sure we only take an IPv4 network
 	@IFS=. read -ra NETWORK_ADDR_SPACE <<< "$$(docker network inspect kind --format json | jq -r '.[0].IPAM.Config[].Subnet | select(. | contains(":") | not)')"; \
