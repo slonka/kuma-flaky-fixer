@@ -2,6 +2,7 @@ package spire
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/gruntwork-io/terratest/modules/helm"
 	"github.com/gruntwork-io/terratest/modules/k8s"
@@ -84,7 +85,7 @@ func (t *k8sDeployment) waitForWebhookEndpoints(cluster framework.Cluster, webho
 		return errors.Wrapf(err, "error getting Kubernetes client")
 	}
 
-	_, err = retry.DoWithRetryE(cluster.GetTesting(), "wait for webhook endpoints", framework.DefaultRetries*3, framework.DefaultTimeout, func() (string, error) {
+	_, err = retry.DoWithRetryE(cluster.GetTesting(), fmt.Sprintf("wait for %s webhook endpoints", webhookName), framework.DefaultRetries*3, framework.DefaultTimeout, func() (string, error) {
 		endpoints, endpointErr := clientset.CoreV1().Endpoints(t.namespace).Get(context.Background(), webhookName, metav1.GetOptions{})
 		if endpointErr != nil {
 			return "", endpointErr
