@@ -197,8 +197,8 @@ k3d/configure/cni/flannel:
 		TIMES_TRIED=$$((TIMES_TRIED+1)); \
 		if [[ $$TIMES_TRIED -ge $$MAX_ALLOWED_TRIES ]]; then \
 			echo "Flannel subnet.env not created after 240s timeout"; \
-			echo "Contents of /run/flannel/:"; \
-			docker exec k3d-$(KIND_CLUSTER_NAME)-server-0 ls -la /run/flannel/ 2>/dev/null || echo "(directory not found)"; \
+			echo "Contents of /run/flannel/ on server node:"; \
+			docker exec k3d-$(KIND_CLUSTER_NAME)-server-0 ls -la /run/flannel/ 2>/dev/null || echo "(directory missing)"; \
 			exit 1; \
 		fi; \
 	done; \
@@ -248,8 +248,6 @@ k3d/wait:
 		echo "Waiting for the cluster to come up" && sleep 1; \
 		TIMES_TRIED=$$((TIMES_TRIED+1)); \
 		if [[ $$TIMES_TRIED -ge $$MAX_ALLOWED_TRIES ]]; then \
-			echo "=== kube-system Events ==="; \
-			KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) get events -n kube-system --sort-by='.lastTimestamp' || true; \
 			KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) get pods -n kube-system -o name | while read pod; do \
 				echo "=== Describe $$pod ==="; \
 				KUBECONFIG=$(KIND_KUBECONFIG) $(KUBECTL) -n kube-system describe $$pod; \
