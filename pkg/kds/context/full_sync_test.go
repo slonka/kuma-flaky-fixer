@@ -63,6 +63,8 @@ var _ = Describe("Full sync tests", func() {
 		cfg.Multizone.Global.KDS.TlsEnabled = false
 		cfg.Multizone.Global.KDS.ZoneInsightFlushInterval = config_types.Duration{Duration: 100 * time.Millisecond}
 		cfg.Mode = config_core.Global
+		cfg.General.ResilientComponentBaseBackoff = config_types.Duration{Duration: 100 * time.Millisecond}
+		cfg.General.ResilientComponentMaxBackoff = config_types.Duration{Duration: 5 * time.Second}
 		rt := setup.NewTestRuntime(ctx, cfg, globalStore)
 		Expect(global.Setup(rt)).To(Succeed())
 		wg.Add(1)
@@ -73,8 +75,8 @@ var _ = Describe("Full sync tests", func() {
 		}()
 		// Wait for the global CP's gRPC server to be accepting connections before
 		// starting zone CPs. Without this, zone mux clients can hit "connection
-		// refused" on their first dial and trigger the resilient component's base
-		// backoff (5s), consuming most of the 30s Eventually window for sync verification.
+		// refused" on their first dial and trigger a resilient component backoff,
+		// delaying sync and potentially exhausting the 30s Eventually window.
 		Eventually(func() error {
 			conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", globalPort), time.Second)
 			if err != nil {
@@ -94,6 +96,8 @@ var _ = Describe("Full sync tests", func() {
 			cfg.Multizone.Zone.Name = zoneName
 			cfg.Multizone.Zone.GlobalAddress = fmt.Sprintf("grpc://127.0.0.1:%d", globalPort)
 			cfg.Multizone.Global.KDS.ZoneInsightFlushInterval = config_types.Duration{Duration: 100 * time.Millisecond}
+			cfg.General.ResilientComponentBaseBackoff = config_types.Duration{Duration: 100 * time.Millisecond}
+			cfg.General.ResilientComponentMaxBackoff = config_types.Duration{Duration: 5 * time.Second}
 			rt := setup.NewTestRuntime(ctx, cfg, zoneStore)
 			Expect(zone.Setup(rt)).To(Succeed())
 			wg.Add(1)
