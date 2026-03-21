@@ -90,6 +90,17 @@ E2E_ENV_VARS += PATH=$(CI_TOOLS_BIN_DIR):$$PATH
 test/e2e/list:
 	@echo $(ALL_TESTS)
 
+# IMPORTANT: $(MISE) install MUST run serially before the parallel cluster starts below.
+# The CI workflow uses MISE_DISABLE_TOOLS=golangci-lint,skaffold in the jdx/mise-action
+# step, so those tools are not pre-installed. When $(MAKE) -j spawns parallel subprocesses
+# for kuma-1 and kuma-2, each subprocess re-parses mk/dev.mk at startup and evaluates
+# $(shell $(MISE) which golangci-lint) and similar expressions. If any tool is missing,
+# mise auto-install triggers in both subprocesses simultaneously. Both then race to
+# rebuild runtime symlinks (e.g. create skaffold/latest), and the second process fails:
+#   mise ERROR failed to ln -sf ./2.18.0 skaffold/latest
+#   mise ERROR File exists (os error 17)
+# Running $(MISE) install once before the parallel starts ensures all tools and their
+# symlinks exist. $(MISE) install is idempotent (no-op if already installed).
 .PHONY: test/e2e/k8s/start
 test/e2e/k8s/start:
 	# Pre-install all mise tools serially before parallel cluster starts.
