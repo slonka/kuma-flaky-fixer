@@ -91,7 +91,9 @@ test/e2e/list:
 	@echo $(ALL_TESTS)
 
 .PHONY: test/e2e/k8s/start
-test/e2e/k8s/start: $(K8SCLUSTERS_START_TARGETS)
+test/e2e/k8s/start:
+	$(MISE) install # ensure all tools are installed serially before parallel cluster starts to avoid mise symlink race
+	$(MAKE) $(K8SCLUSTERS_START_TARGETS)
 	$(MAKE) $(K8SCLUSTERS_LOAD_IMAGES_TARGETS) # execute after start targets
 
 .PHONY: test/e2e/k8s/stop
