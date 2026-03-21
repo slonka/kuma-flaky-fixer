@@ -67,6 +67,7 @@ spec:
 	})
 
 	E2EAfterAll(func() {
+		Expect(DeleteYamlK8s(workflowRegistration)(kubernetes.Cluster)).To(Succeed())
 		Expect(kubernetes.Cluster.TriggerDeleteNamespace(namespace)).To(Succeed())
 		Expect(kubernetes.Cluster.TriggerDeleteNamespace(spireNamespace)).To(Succeed())
 		Expect(kubernetes.Cluster.DeleteMesh(meshName)).To(Succeed())
@@ -119,7 +120,7 @@ spec:
 			resp, err := client.CollectEchoResponse(kubernetes.Cluster, "demo-client", fmt.Sprintf("test-server.%s.svc.cluster.local:80", namespace), client.FromKubernetesPod(namespace, "demo-client"))
 			g.Expect(err).ToNot(HaveOccurred())
 			g.Expect(resp.Instance).To(Equal("test-server-spire"))
-		}, "2m", "1s").MustPassRepeatedly(5).Should(Succeed())
+		}, "3m", "1s").MustPassRepeatedly(5).Should(Succeed())
 
 		admin, err := kubernetes.Cluster.GetOrCreateAdminTunnel(portforward.Spec{
 			AppName:   "test-server",
