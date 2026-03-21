@@ -2,7 +2,9 @@ package meshidentity
 
 import (
 	"fmt"
+	"strings"
 
+	"github.com/gruntwork-io/terratest/modules/k8s"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -112,6 +114,21 @@ spec:
 				}),
 			)).
 			Setup(kubernetes.Cluster)).To(Succeed())
+
+		// wait for MeshIdentity to be reconciled by SPIRE provider before checking traffic
+		isMeshIdentityReady := func(name string) (bool, error) {
+			GinkgoHelper()
+			output, err := k8s.RunKubectlAndGetOutputE(kubernetes.Cluster.GetTesting(), kubernetes.Cluster.GetKubectlOptions(Config.KumaNamespace), "get", "meshidentity", name, "-ojson")
+			if err != nil {
+				return false, err
+			}
+			return strings.Contains(output, "PartiallyReady") || strings.Contains(output, "Successfully initialized"), nil
+		}
+		Eventually(func(g Gomega) {
+			isReady, err := isMeshIdentityReady("identity-spire")
+			g.Expect(err).ToNot(HaveOccurred())
+			g.Expect(isReady).To(BeTrue())
+		}, "2m", "1s").Should(Succeed())
 
 		// then
 		// traffic works
