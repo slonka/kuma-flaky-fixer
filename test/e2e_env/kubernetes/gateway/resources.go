@@ -187,6 +187,18 @@ spec:
 
 		go keepConnectionOpen()
 
+		// Wait for the new demo-client pod to exist before checking the connection
+		// limit. keepConnectionOpen polls PodNameOfApp for up to 5 minutes (to
+		// handle the old Terminating pod), and the goroutine may not have
+		// established its blocking connection before the Eventually below starts.
+		// Waiting here ensures the goroutine has found the pod and is about to
+		// (or already has) established the telnet connection, so the 3-minute
+		// window below is sufficient for the limit to be observed.
+		Eventually(func(g Gomega) {
+			_, err := PodNameOfApp(kubernetes.Cluster, "demo-client", waitingClientNamespace)
+			g.Expect(err).ToNot(HaveOccurred())
+		}, "5m", "1s").Should(Succeed())
+
 		Eventually(func(g Gomega) {
 			response, err := client.CollectFailure(
 				kubernetes.Cluster, "demo-client", target,
