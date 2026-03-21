@@ -59,6 +59,7 @@ K3D_CLUSTER_CREATE_OPTS ?= -i rancher/k3s:$(CI_K3S_VERSION) \
 	--k3s-arg '--disable=metrics-server@server:0' \
 	--k3s-arg '--kubelet-arg=image-gc-high-threshold=100@server:0' \
 	--k3s-arg '--disable=servicelb@server:0' \
+	--k3s-arg '--disable=local-storage@server:0' \
     --volume '$(subst @,\@,$(TOP)/$(KUMA_DIR))/test/framework/deployments:/tmp/deployments@server:0' \
 	--network kind \
 	--port "$(PORT_PREFIX)80-$(PORT_PREFIX)99:30080-30099@server:0" \
@@ -183,10 +184,24 @@ k3d/configure/cni: k3d/configure/cni/$(K3D_NETWORK_CNI_EFFECTIVE)
 	  echo "[WARNING]: Unsupported K3D CNI '$(K3D_NETWORK_CNI_REQ)', falling back to '$(K3D_NETWORK_CNI_DEFAULT)'" >&2; \
 	fi
 
-# Default: flannel (no action required)
+# Default: flannel - wait for flannel to write subnet.env before proceeding.
+# Pod sandbox creation (via the flannel CNI plugin) fails with
+# "loadFlannelSubnetEnv failed: open /run/flannel/subnet.env: no such file or directory"
+# if the flannel DaemonSet hasn't finished initializing its VXLAN interface yet.
+# Polling here ensures k3d/wait only starts after flannel is ready.
 .PHONY: k3d/configure/cni/flannel
 k3d/configure/cni/flannel:
-	@true
+	@echo "Waiting for flannel to initialize subnet.env..."; \
+	TRIES=0; MAX_TRIES=30; \
+	until docker exec k3d-$(KIND_CLUSTER_NAME)-server-0 test -f /run/flannel/subnet.env 2>/dev/null; do \
+		TRIES=$$((TRIES+1)); \
+		if [[ $$TRIES -ge $$MAX_TRIES ]]; then \
+			echo "ERROR: flannel subnet.env not found after $$MAX_TRIES attempts"; exit 1; \
+		fi; \
+		echo "  flannel not ready yet (attempt $$TRIES/$$MAX_TRIES), retrying in 2s..."; \
+		sleep 2; \
+	done; \
+	echo "flannel subnet.env is ready"
 
 # Calico (runs when K3D_NETWORK_CNI=calico)
 .PHONY: k3d/configure/cni/calico
