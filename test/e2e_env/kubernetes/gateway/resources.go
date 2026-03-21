@@ -185,6 +185,16 @@ spec:
 
 		Expect(kubernetes.Cluster.KillAppPod("demo-client", waitingClientNamespace)).To(Succeed())
 
+		// KillAppPod waits for the new pod to be Available, but the old pod may
+		// still be in Terminating state. PodNameOfApp requires exactly 1 pod and
+		// fails while both pods exist. Wait here (synchronously, before starting
+		// the goroutine) so the goroutine can find the pod immediately and
+		// establish its connection well before the 3m Eventually below expires.
+		Eventually(func(g Gomega) {
+			_, err := PodNameOfApp(kubernetes.Cluster, "demo-client", waitingClientNamespace)
+			g.Expect(err).ToNot(HaveOccurred())
+		}, "5m", "1s").Should(Succeed())
+
 		go keepConnectionOpen()
 
 		// Wait for the new demo-client pod to exist before checking the connection
