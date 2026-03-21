@@ -90,8 +90,19 @@ E2E_ENV_VARS += PATH=$(CI_TOOLS_BIN_DIR):$$PATH
 test/e2e/list:
 	@echo $(ALL_TESTS)
 
+.PHONY: test/e2e/k8s/start/clusters
+test/e2e/k8s/start/clusters: $(K8SCLUSTERS_START_TARGETS)
+
 .PHONY: test/e2e/k8s/start
-test/e2e/k8s/start: $(K8SCLUSTERS_START_TARGETS)
+test/e2e/k8s/start:
+	# Ensure all mise tools are installed before starting clusters in parallel.
+	# When clusters start in parallel, each make subprocess re-evaluates mk/dev.mk,
+	# which calls "$(MISE) which golangci-lint" etc. If the tools are not installed,
+	# mise triggers auto-install in both processes simultaneously, causing a symlink
+	# race condition (EEXIST / "File exists"). Running $(MISE) install here first
+	# ensures tools are pre-installed so the parallel subprocesses never trigger auto-install.
+	$(MISE) install
+	$(MAKE) test/e2e/k8s/start/clusters
 	$(MAKE) $(K8SCLUSTERS_LOAD_IMAGES_TARGETS) # execute after start targets
 
 .PHONY: test/e2e/k8s/stop
