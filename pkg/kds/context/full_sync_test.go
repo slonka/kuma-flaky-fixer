@@ -94,7 +94,10 @@ var _ = Describe("Full sync tests", func() {
 			cfg.Store.Type = config_store.MemoryStore
 			cfg.Mode = config_core.Zone
 			cfg.Multizone.Zone.Name = zoneName
-			cfg.Multizone.Zone.GlobalAddress = fmt.Sprintf("grpc://127.0.0.1:%d", globalPort)
+			// Use 127.0.0.1 explicitly instead of "localhost" to avoid IPv6 resolution
+		// on Linux CI runners where "localhost" can resolve to [::1] while the gRPC
+		// server binds only on 0.0.0.0 (IPv4), causing "connection refused" errors.
+		cfg.Multizone.Zone.GlobalAddress = fmt.Sprintf("grpc://127.0.0.1:%d", globalPort)
 			cfg.Multizone.Global.KDS.ZoneInsightFlushInterval = config_types.Duration{Duration: 100 * time.Millisecond}
 			cfg.General.ResilientComponentBaseBackoff = config_types.Duration{Duration: 100 * time.Millisecond}
 			cfg.General.ResilientComponentMaxBackoff = config_types.Duration{Duration: 5 * time.Second}
