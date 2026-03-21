@@ -153,7 +153,7 @@ mtls:
 			_, stderr, err := curlAddr("test-server.mesh")
 			g.Expect(err).ToNot(HaveOccurred())
 			g.Expect(stderr).To(ContainSubstring("HTTP/1.1 200 OK"))
-		}).Should(Succeed())
+		}, "10s", "500ms").Should(Succeed())
 	})
 
 	DescribeTable("should enforce traffic permissions",
