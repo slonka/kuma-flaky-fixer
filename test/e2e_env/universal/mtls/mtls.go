@@ -146,7 +146,15 @@ mtls:
 		Expect(universal.Cluster.Install(YamlUniversal(meshYaml))).To(Succeed())
 
 		By("Wait for mTLS config to propagate to all dataplanes")
-		trafficAllowed("test-server.mesh")
+		// Use a longer stabilization window than trafficAllowed's default (10 passes)
+		// to ensure all delayed xDS updates have been processed before running
+		// Consistently. Without this, a second wave of xDS updates arriving ~6s
+		// after mTLS is enabled can cause a brief HTTP error that fails Consistently.
+		Eventually(func(g Gomega) {
+			_, stderr, err := curlAddr("test-server.mesh")
+			g.Expect(err).ToNot(HaveOccurred())
+			g.Expect(stderr).To(ContainSubstring("HTTP/1.1 200 OK"))
+		}, "60s", "250ms").MustPassRepeatedly(30).Should(Succeed())
 
 		By("inside-mesh communication never fails")
 		Consistently(func(g Gomega) {
