@@ -85,7 +85,7 @@ func (t *k8sDeployment) waitForWebhookEndpoints(cluster framework.Cluster, webho
 		return errors.Wrapf(err, "error getting Kubernetes client")
 	}
 
-	_, err = retry.DoWithRetryE(cluster.GetTesting(), "wait for webhook endpoints", framework.DefaultRetries*3, framework.DefaultTimeout, func() (string, error) {
+	_, err = retry.DoWithRetryE(cluster.GetTesting(), "wait for webhook endpoints", framework.DefaultRetries*6, framework.DefaultTimeout, func() (string, error) {
 		endpoints, endpointErr := clientset.CoreV1().Endpoints(t.namespace).Get(context.Background(), webhookName, metav1.GetOptions{})
 		if endpointErr != nil {
 			return "", endpointErr
@@ -107,7 +107,7 @@ func (t *k8sDeployment) isPodReady(cluster framework.Cluster, selector string) e
 			LabelSelector: selector,
 		},
 		1,
-		framework.DefaultRetries*3, // spire is fetched from the internet. Increase the timeout to prevent long downloads of images.
+		framework.DefaultRetries*6, // spire is fetched from the internet. Increase the timeout to prevent long downloads of images.
 		framework.DefaultTimeout)
 	if err != nil {
 		return err
@@ -127,7 +127,7 @@ func (t *k8sDeployment) isPodReady(cluster framework.Cluster, selector string) e
 		if err := k8s.WaitUntilPodAvailableE(cluster.GetTesting(),
 			cluster.GetKubectlOptions(t.namespace),
 			pod.Name,
-			framework.DefaultRetries*3, // spire is fetched from the internet. Increase the timeout to prevent long downloads of images.
+			framework.DefaultRetries*6, // spire is fetched from the internet. Increase the timeout to prevent long downloads of images.
 			framework.DefaultTimeout); err != nil {
 			return err
 		}
