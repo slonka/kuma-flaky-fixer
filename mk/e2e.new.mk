@@ -92,6 +92,15 @@ test/e2e/list:
 
 .PHONY: test/e2e/k8s/start
 test/e2e/k8s/start:
+	# $(MISE) install MUST run serially before the parallel -j invocation below.
+	# Each sub-make spawned by -j re-parses the full Makefile, which evaluates
+	# $(shell $(MISE) which <tool>) expressions in mk/dev.mk. If a tool is not
+	# yet installed, mise auto-installs it and races to create the runtime
+	# symlink (e.g. golangci-lint/latest). The second parallel process fails:
+	#   mise ERROR failed to ln -sf ./2.11.3 golangci-lint/latest
+	#   mise ERROR File exists (os error 17)
+	# Running $(MISE) install first is idempotent and ensures all symlinks exist
+	# before any parallel subprocess parses the Makefile.
 	$(MISE) install
 	$(MAKE) -j $(K8SCLUSTERS_START_TARGETS)
 	$(MAKE) $(K8SCLUSTERS_LOAD_IMAGES_TARGETS) # execute after start targets
