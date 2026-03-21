@@ -92,6 +92,11 @@ test/e2e/list:
 
 .PHONY: test/e2e/k8s/start
 test/e2e/k8s/start:
+	# $(MISE) install must run serially before parallel cluster starts.
+	# Each $(MAKE) -j subprocess parses the full Makefile at startup,
+	# evaluating $(shell $(MISE) which golangci-lint) etc. in mk/dev.mk.
+	# If tools are not pre-installed, mise auto-install triggers in both
+	# parallel processes simultaneously, causing a symlink race (EEXIST).
 	$(MISE) install
 	$(MAKE) -j $(K8SCLUSTERS_START_TARGETS)
 	$(MAKE) $(K8SCLUSTERS_LOAD_IMAGES_TARGETS) # execute after start targets
