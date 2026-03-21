@@ -2,6 +2,7 @@ package spire
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/gruntwork-io/terratest/modules/helm"
 	"github.com/gruntwork-io/terratest/modules/k8s"
@@ -71,11 +72,10 @@ func (t *k8sDeployment) Deploy(cluster framework.Cluster) error {
 	if err != nil {
 		return err
 	}
-	err = t.isPodReady(cluster, "app.kubernetes.io/name=spire-controller-manager")
-	if err != nil {
-		return err
-	}
-
+	// spire-controller-manager runs as a sidecar inside the spire-server pod,
+	// not as a standalone Deployment, so there is no pod with the label
+	// app.kubernetes.io/name=spire-controller-manager. Waiting for
+	// webhook endpoints is a stronger and correct readiness signal.
 	return t.waitForWebhookEndpoints(cluster, "spire-controller-manager-webhook")
 }
 
@@ -85,7 +85,7 @@ func (t *k8sDeployment) waitForWebhookEndpoints(cluster framework.Cluster, webho
 		return errors.Wrapf(err, "error getting Kubernetes client")
 	}
 
-	_, err = retry.DoWithRetryE(cluster.GetTesting(), "wait for webhook endpoints", framework.DefaultRetries*3, framework.DefaultTimeout, func() (string, error) {
+	_, err = retry.DoWithRetryE(cluster.GetTesting(), fmt.Sprintf("wait for %s webhook endpoints", webhookName), framework.DefaultRetries*6, framework.DefaultTimeout, func() (string, error) {
 		endpoints, endpointErr := clientset.CoreV1().Endpoints(t.namespace).Get(context.Background(), webhookName, metav1.GetOptions{})
 		if endpointErr != nil {
 			return "", endpointErr
@@ -107,7 +107,7 @@ func (t *k8sDeployment) isPodReady(cluster framework.Cluster, selector string) e
 			LabelSelector: selector,
 		},
 		1,
-		framework.DefaultRetries*3, // spire is fetched from the internet. Increase the timeout to prevent long downloads of images.
+		framework.DefaultRetries*6, // spire is fetched from the internet. Increase the timeout to prevent long downloads of images.
 		framework.DefaultTimeout)
 	if err != nil {
 		return err
@@ -127,7 +127,7 @@ func (t *k8sDeployment) isPodReady(cluster framework.Cluster, selector string) e
 		if err := k8s.WaitUntilPodAvailableE(cluster.GetTesting(),
 			cluster.GetKubectlOptions(t.namespace),
 			pod.Name,
-			framework.DefaultRetries*3, // spire is fetched from the internet. Increase the timeout to prevent long downloads of images.
+			framework.DefaultRetries*6, // spire is fetched from the internet. Increase the timeout to prevent long downloads of images.
 			framework.DefaultTimeout); err != nil {
 			return err
 		}
